@@ -30,10 +30,13 @@ export default function App() {
   // Chat Playground State
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [isCompareMode, setIsCompareMode] = useState(false);
+  const [secondaryImage, setSecondaryImage] = useState(null);
+  const [secondaryPreview, setSecondaryPreview] = useState(null);
   const [chatHistory, setChatHistory] = useState([
     {
       role: 'bot',
-      content: 'Hello! I am your Mini Vision-Language Assistant. Upload an image and ask me questions about it!',
+      content: 'Hello! I am your Mini Vision-Language Assistant. Upload an image (or switch to Compare Mode) and ask me questions!',
       time: 'Just now'
     }
   ]);
@@ -42,6 +45,7 @@ export default function App() {
   const [maxTokens, setMaxTokens] = useState(80);
 
   const fileInputRef = useRef(null);
+  const secondFileInputRef = useRef(null);
   const chatBottomRef = useRef(null);
 
   useEffect(() => {
@@ -167,6 +171,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image_base64: selectedImage,
+          secondary_image_base64: isCompareMode ? secondaryImage : null,
           question: q,
           history: apiHistory,
           max_new_tokens: maxTokens,
@@ -281,40 +286,92 @@ export default function App() {
                 <span className="card-title">
                   <Upload size={18} color="var(--accent-cyan)" /> Visual Input
                 </span>
-                {imagePreview && (
-                  <span className="badge-tag" style={{ color: 'var(--accent-green)', borderColor: 'rgba(52, 211, 153, 0.3)' }}>
-                    224×224 Normalization
-                  </span>
-                )}
+                <button
+                  className="tab-btn"
+                  style={{
+                    fontSize: '0.72rem',
+                    padding: '0.2rem 0.5rem',
+                    background: isCompareMode ? 'rgba(129, 140, 248, 0.2)' : 'rgba(51, 65, 85, 0.4)',
+                    color: isCompareMode ? 'var(--accent-purple)' : 'var(--text-muted)',
+                    border: '1px solid var(--border-color)',
+                  }}
+                  onClick={() => setIsCompareMode(!isCompareMode)}
+                >
+                  {isCompareMode ? '✔ Compare Mode (2 Images)' : '+ Compare 2 Images'}
+                </button>
               </div>
 
-              {imagePreview ? (
-                <div className="preview-container">
-                  <img src={imagePreview} alt="Uploaded scene" className="preview-img" />
-                  <button
-                    className="remove-img-btn"
-                    onClick={() => {
-                      setImagePreview(null);
-                      setSelectedImage(null);
+              {/* Primary Image Slot */}
+              <div style={{ marginBottom: isCompareMode ? '0.75rem' : '0' }}>
+                {imagePreview ? (
+                  <div className="preview-container" style={{ height: isCompareMode ? '135px' : '260px' }}>
+                    <img src={imagePreview} alt="Primary" className="preview-img" />
+                    <button
+                      className="remove-img-btn"
+                      onClick={() => {
+                        setImagePreview(null);
+                        setSelectedImage(null);
+                      }}
+                    >
+                      <Trash2 size={13} /> Clear
+                    </button>
+                  </div>
+                ) : (
+                  <div className="upload-dropzone" style={{ height: isCompareMode ? '135px' : '260px' }} onClick={() => fileInputRef.current?.click()}>
+                    <Upload size={24} color="#64748b" />
+                    <div style={{ fontWeight: 600, fontSize: '0.8rem' }}>Upload Primary Image</div>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                />
+              </div>
+
+              {/* Secondary Image Slot (Compare Mode) */}
+              {isCompareMode && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  {secondaryPreview ? (
+                    <div className="preview-container" style={{ height: '135px' }}>
+                      <img src={secondaryPreview} alt="Secondary" className="preview-img" />
+                      <button
+                        className="remove-img-btn"
+                        onClick={() => {
+                          setSecondaryPreview(null);
+                          setSecondaryImage(null);
+                        }}
+                      >
+                        <Trash2 size={13} /> Clear
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="upload-dropzone" style={{ height: '135px' }} onClick={() => secondFileInputRef.current?.click()}>
+                      <Upload size={24} color="#818cf8" />
+                      <div style={{ fontWeight: 600, fontSize: '0.8rem', color: '#818cf8' }}>Upload Comparison Image (Image 2)</div>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    ref={secondFileInputRef}
+                    style={{ display: 'none' }}
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setSecondaryPreview(reader.result);
+                          setSecondaryImage(reader.result);
+                        };
+                        reader.readAsDataURL(file);
+                      }
                     }}
-                  >
-                    <Trash2 size={13} /> Remove
-                  </button>
-                </div>
-              ) : (
-                <div className="upload-dropzone" onClick={() => fileInputRef.current?.click()}>
-                  <Upload size={32} color="#64748b" />
-                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Upload or Drop Image</div>
-                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>PNG, JPG, WEBP up to 10MB</div>
+                  />
                 </div>
               )}
-              <input
-                type="file"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                accept="image/*"
-                onChange={handleImageUpload}
-              />
 
               {/* Generation Controls */}
               <div style={{ marginTop: '1.25rem' }}>

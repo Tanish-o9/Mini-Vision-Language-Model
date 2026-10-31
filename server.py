@@ -81,6 +81,7 @@ def get_model(checkpoint: str = "checkpoints/stage2", stage: str = "stage2"):
 
 class ChatRequest(BaseModel):
     image_base64: str
+    secondary_image_base64: Optional[str] = None
     question: str
     history: Optional[List[List[str]]] = None
     max_new_tokens: Optional[int] = 80
@@ -156,6 +157,14 @@ def chat_predict(req: ChatRequest):
         )
         img_bytes = base64.b64decode(b64data)
         image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+
+        secondary_image = None
+        if req.secondary_image_base64:
+            h2, b64_2 = (
+                req.secondary_image_base64.split(",", 1) if "," in req.secondary_image_base64 else ("", req.secondary_image_base64)
+            )
+            img_bytes_2 = base64.b64decode(b64_2)
+            secondary_image = Image.open(io.BytesIO(img_bytes_2)).convert("RGB")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid image format: {e}")
 
@@ -167,6 +176,7 @@ def chat_predict(req: ChatRequest):
             question=req.question,
             history=req.history,
             max_new_tokens=req.max_new_tokens or 80,
+            secondary_image=secondary_image,
         )
         latency = time.perf_counter() - start
         return ChatResponse(answer=answer, latency_seconds=round(latency, 3), device=model.device_name)
@@ -181,3 +191,4 @@ if dist_dir.exists():
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
+

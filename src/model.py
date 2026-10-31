@@ -207,13 +207,22 @@ class MiniVLM(nn.Module):
         return output.loss
 
     @torch.no_grad()
-    def answer(self, image, question, history=None, max_new_tokens=80):
+    def answer(self, image, question, history=None, max_new_tokens=80, secondary_image=None):
         self.eval()
         pixels = self.processor(images=image.convert("RGB"), return_tensors="pt")["pixel_values"]
         visual_features = self.encode_image(pixels)
         visual_tokens = self.projector(visual_features)
 
-        prompt = self.format_prompt(question, history=history, is_caption=False)
+        if secondary_image is not None:
+            pixels2 = self.processor(images=secondary_image.convert("RGB"), return_tensors="pt")["pixel_values"]
+            visual_features2 = self.encode_image(pixels2)
+            visual_tokens2 = self.projector(visual_features2)
+            visual_tokens = torch.cat([visual_tokens, visual_tokens2], dim=1)
+            formatted_q = f"Image 1 and Image 2 are provided. {question}"
+        else:
+            formatted_q = question
+
+        prompt = self.format_prompt(formatted_q, history=history, is_caption=False)
         prompt_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.device_name)
         prompt_embeds = self.qwen.get_input_embeddings()(prompt_ids)
         inputs_embeds = torch.cat([visual_tokens, prompt_embeds], dim=1)
