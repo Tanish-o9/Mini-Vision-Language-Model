@@ -28,6 +28,11 @@ outputs/*.csv
 .DS_Store
 Thumbs.db
 
+# Frontend node_modules
+node_modules/
+frontend/node_modules/
+.npm/
+
 # IDE & Editor files
 .vscode/
 .idea/
