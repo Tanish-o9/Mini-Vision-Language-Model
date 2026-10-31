@@ -6,6 +6,8 @@
 Built with **Frozen CLIP ViT-B/32** + **Trainable MLP Projector** + **Qwen2.5-0.5B-Instruct (+ LoRA)**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+[![CI/CD Smoke Test](https://img.shields.io/github/actions/workflow/status/Tanish-o9/Mini-Vision-Language-Model/smoke-test.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI%2FCD%20Tests)](https://github.com/Tanish-o9/Mini-Vision-Language-Model/actions)
+[![React Dashboard](https://img.shields.io/badge/Frontend-React%2019%20%2B%20Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black)](frontend/)
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2%2B-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Transformers-4.45%2B-FFD21E?style=for-the-badge)](https://huggingface.co/)
@@ -190,12 +192,27 @@ python evaluate.py --jsonl data/vqa/test.jsonl --checkpoint checkpoints/stage2
 ```
 *Outputs:* Prints normalized exact-match accuracy, mean token-F1 score, and latency; exports per-sample predictions to `outputs/evaluation.csv`.
 
-### Step 7: Launch Multi-Turn Chatbot Demo
-Launch the Gradio web interface for interactive conversation:
+### Step 7: Launch the React AI Studio Dashboard 🖥️
+Run the FastAPI backend server to serve the full compiled **React AI Studio Dashboard** (NOT Streamlit — full React 19 + Vite experience!):
+```bash
+python server.py
+```
+Open **`http://localhost:8000`** in your browser to explore:
+- 💬 **Multimodal Playground**: Drag-and-drop images with full multi-turn conversational chat bubbles.
+- 📊 **Training Analytics**: Loss & convergence curves across Stage 1 and Stage 2 with interactive SVG charts.
+- 🧠 **Architecture Inspector**: Live visualization of tensor flow from $224 \times 224$ to CLIP, Projector, and Qwen embeddings.
+- ⚙️ **Diagnostics**: Real-time CUDA / VRAM memory allocation stats and active checkpoint details.
+
+*(Optional: For live hot-reloading frontend development)*:
+```bash
+cd frontend
+npm run dev   # Runs on http://localhost:5173
+```
+
+*(Alternative: Quick Gradio Demo)*:
 ```bash
 python app.py --stage stage2 --checkpoint checkpoints/stage2
 ```
-Open `http://127.0.0.1:7860`, upload an image, and converse with stateful context!
 
 ---
 
@@ -203,6 +220,14 @@ Open `http://127.0.0.1:7860`, upload an image, and converse with stateful contex
 
 ```
 Mini-Vision-Language-Model/
+├── .github/workflows/       # GitHub Actions automated CI/CD pipeline
+│   └── smoke-test.yml       # Automated test suite on push/PR
+├── frontend/                # Full React 19 + Vite AI Studio Dashboard
+│   ├── src/                 # React components (Playground, Analytics, Inspector)
+│   ├── dist/                # Production-ready compiled web bundle
+│   └── package.json         # Node.js dependencies
+├── server.py                # FastAPI backend server with REST endpoints & static server
+├── download_weights.py      # Quickstart checkpoint downloader & demo initializer
 ├── config.yaml              # Centralized hyperparameters & paths
 ├── requirements.txt         # Pinned Python package dependencies
 ├── LICENSE                  # MIT Open Source License
