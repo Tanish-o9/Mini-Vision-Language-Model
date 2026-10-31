@@ -1,0 +1,23 @@
+model:
+  vision_model: openai/clip-vit-base-patch32
+  language_model: Qwen/Qwen2.5-0.5B-Instruct
+  image_size: 224
+  max_new_tokens: 80
+  resample_tokens: null  # Optional downsampling: 16, 25, 36, or null (49 tokens)
+
+training:
+  learning_rate_stage1: 0.0001
+  learning_rate_stage2: 0.00002
+  warmup_ratio: 0.05
+  epochs_stage1: 2
+  epochs_stage2: 2
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  max_answer_tokens: 96
+  lora_r: 8
+  lora_alpha: 16
+  lora_dropout: 0.05
+
+paths:
+  stage1_checkpoint: checkpoints/stage1/projector.pt
+  stage2_checkpoint: checkpoints/stage2
