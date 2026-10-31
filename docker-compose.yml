@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  mini-vlm-studio:
+    build: .
+    container_name: mini_vlm_studio
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    volumes:
+      - ./checkpoints:/app/checkpoints
+      - ./outputs:/app/outputs
+      - ./data:/app/data
+    restart: unless-stopped
