@@ -54,3 +54,4 @@ if __name__ == "__main__":
     parser.add_argument("--force", action="store_true", help="Force overwrite existing checkpoints")
     args = parser.parse_args()
     initialize_demo_checkpoints(force=args.force)
+

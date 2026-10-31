@@ -8,6 +8,8 @@ Built with **Frozen CLIP ViT-B/32** + **Trainable MLP Projector** + **Qwen2.5-0.
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 [![CI/CD Smoke Test](https://img.shields.io/github/actions/workflow/status/Tanish-o9/Mini-Vision-Language-Model/smoke-test.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI%2FCD%20Tests)](https://github.com/Tanish-o9/Mini-Vision-Language-Model/actions)
 [![React Dashboard](https://img.shields.io/badge/Frontend-React%2019%20%2B%20Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black)](frontend/)
+[![Open In Colab](https://img.shields.io/badge/Google%20Colab-Open%20Notebook-F9AB00?style=for-the-badge&logo=googlecolab&logoColor=white)](https://colab.research.google.com/github/Tanish-o9/Mini-Vision-Language-Model/blob/main/notebooks/Quickstart_Colab.ipynb)
+[![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white)](docker-compose.yml)
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2%2B-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Transformers-4.45%2B-FFD21E?style=for-the-badge)](https://huggingface.co/)
@@ -214,6 +216,19 @@ npm run dev   # Runs on http://localhost:5173
 python app.py --stage stage2 --checkpoint checkpoints/stage2
 ```
 
+### Step 8: Run in Google Colab 🚀
+Don't have a local GPU? Train and experiment on Google Colab's free T4 GPU in 1 click:
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Tanish-o9/Mini-Vision-Language-Model/blob/main/notebooks/Quickstart_Colab.ipynb)
+
+### Step 9: Containerized Deployment (Docker) 🐳
+Launch the backend API and compiled React Studio Dashboard in an isolated container:
+```bash
+# Build & start container
+docker-compose up --build
+
+# Open in browser: http://localhost:8000
+```
+
 ---
 
 ## 📁 Repository Structure
@@ -222,10 +237,14 @@ python app.py --stage stage2 --checkpoint checkpoints/stage2
 Mini-Vision-Language-Model/
 ├── .github/workflows/       # GitHub Actions automated CI/CD pipeline
 │   └── smoke-test.yml       # Automated test suite on push/PR
+├── notebooks/               # 1-Click Interactive Jupyter/Colab notebooks
+│   └── Quickstart_Colab.ipynb
 ├── frontend/                # Full React 19 + Vite AI Studio Dashboard
-│   ├── src/                 # React components (Playground, Analytics, Inspector)
+│   ├── src/                 # React components (Playground, Dual Comparison, Analytics)
 │   ├── dist/                # Production-ready compiled web bundle
 │   └── package.json         # Node.js dependencies
+├── Dockerfile               # Multi-stage production container image
+├── docker-compose.yml       # One-command container orchestration
 ├── server.py                # FastAPI backend server with REST endpoints & static server
 ├── download_weights.py      # Quickstart checkpoint downloader & demo initializer
 ├── config.yaml              # Centralized hyperparameters & paths
