@@ -9,7 +9,6 @@ Built with **Frozen CLIP ViT-B/32** + **Trainable MLP Projector** + **Qwen2.5-0.
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2%2B-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Transformers-4.45%2B-FFD21E?style=for-the-badge)](https://huggingface.co/)
-[![YouTube](https://img.shields.io/badge/YouTube-Video%20Walkthrough-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtube.com/@Tanish-o9)
 [![GitHub Profile](https://img.shields.io/badge/Author-Tanish--o9-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Tanish-o9)
 
 <br/>
@@ -222,26 +221,10 @@ Mini-Vision-Language-Model/
 
 ---
 
-## 📺 YouTube Walkthrough & Video Tutorial
-
-A complete project breakdown and implementation tutorial is available on YouTube!
-Watch the video walkthrough covering:
-- 🧠 VLM Mathematical intuition & LLaVA architecture breakdown
-- 💻 Code walkthrough of `MiniVLM`, Projector, and ChatML formatting
-- ⚡ Two-stage training with PyTorch Native AMP and LoRA fine-tuning
-- 🖥️ Live demonstration of the Gradio Multi-Turn Chatbot
-
-[![Watch on YouTube](https://img.shields.io/badge/YouTube-Watch%20Walkthrough-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtube.com/@Tanish-o9)
-
-> *Subscribe to the channel for more hands-on AI, LLM, and multimodal deep learning projects!*
-
----
-
 ## 👨‍💻 Author & Connect
 
 **Tanish**  
 - **GitHub:** [@Tanish-o9](https://github.com/Tanish-o9)
-- **YouTube:** [Tanish's Tech Channel](https://youtube.com/@Tanish-o9)
 - **Email:** `tanishrajput673@gmail.com`
 
 If you find this repository helpful, consider giving it a ⭐ on GitHub!
