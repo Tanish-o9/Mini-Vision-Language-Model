@@ -21,16 +21,15 @@ def build_app(checkpoint, stage, load_in_4bit=False):
         resample_tokens=resample_tokens,
         load_in_4bit=load_in_4bit,
     )
-    if stage == "stage1":
-        if Path(checkpoint).exists():
-            model.load_projector(checkpoint)
-    else:
-        proj = Path(checkpoint) / "projector.pt"
-        lora = Path(checkpoint) / "lora"
-        if proj.exists():
-            model.load_projector(proj)
-        if lora.exists():
-            model.load_lora(lora)
+    ckpt_path = Path(checkpoint)
+    proj_file = ckpt_path / "projector.pt" if ckpt_path.is_dir() else ckpt_path
+    if proj_file.exists():
+        model.load_projector(proj_file)
+
+    if stage != "stage1":
+        lora_dir = ckpt_path / "lora" if ckpt_path.is_dir() else None
+        if lora_dir and lora_dir.exists() and (lora_dir / "trained.lock").exists():
+            model.load_lora(lora_dir)
     model.eval()
 
     def user_chat(image, user_message, chat_history):
