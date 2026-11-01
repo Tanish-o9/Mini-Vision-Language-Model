@@ -1,0 +1,11 @@
+{
+  "name": "mini-vision-language-model-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mini Vision-Language Model Studio Frontend",
+  "scripts": {
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "dev": "npm --prefix frontend run dev",
+    "preview": "npm --prefix frontend run preview"
+  }
+}

@@ -35,8 +35,14 @@ import {
 } from 'lucide-react';
 import './App.css';
 
-// Automatically adapt API_BASE whether running under Vite dev (5173) or FastAPI production (8000)
-const API_BASE = window.location.port === '5173' ? 'http://localhost:8000' : '';
+// Automatically adapt API_BASE whether running under Vite dev (5173), custom remote backend URL, or FastAPI production (8000)
+const getApiBase = () => {
+  if (typeof window === 'undefined') return '';
+  const custom = localStorage.getItem('minivlm_backend_url');
+  if (custom && custom.trim()) return custom.trim().replace(/\/$/, '');
+  if (import.meta.env?.VITE_API_URL) return import.meta.env.VITE_API_URL.replace(/\/$/, '');
+  return window.location.port === '5173' ? 'http://localhost:8000' : '';
+};
 
 // Client-side image optimizer
 const compressImageFile = (file, maxWidth = 800, quality = 0.85) => {
@@ -272,6 +278,14 @@ export default function App() {
   const [heatmapCenter, setHeatmapCenter] = useState({ x: 50, y: 50 });
   const [zoomLevel, setZoomLevel] = useState(1);
   const [promptCategory, setPromptCategory] = useState('general');
+
+  // Backend API Connection Endpoint State (Vercel & Remote Tunnel support)
+  const [backendUrl, setBackendUrl] = useState(() => {
+    try { return localStorage.getItem('minivlm_backend_url') || ''; } catch { return ''; }
+  });
+  const [backendInput, setBackendInput] = useState(() => {
+    try { return localStorage.getItem('minivlm_backend_url') || ''; } catch { return ''; }
+  });
   const [selectedArchNode, setSelectedArchNode] = useState(null);
   const [activePreset, setActivePreset] = useState(null);
 
@@ -356,28 +370,28 @@ export default function App() {
 
   const fetchSystemStatus = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/status`);
+      const res = await fetch(`${getApiBase()}/api/status`);
       if (res.ok) setSystemStatus(await res.json());
     } catch (err) {}
   };
 
   const fetchMetrics = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/metrics`);
+      const res = await fetch(`${getApiBase()}/api/metrics`);
       if (res.ok) setMetrics(await res.json());
     } catch (err) {}
   };
 
   const fetchConfig = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/config`);
+      const res = await fetch(`${getApiBase()}/api/config`);
       if (res.ok) setConfig(await res.json());
     } catch (err) {}
   };
 
   const fetchBenchmark = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/benchmark`);
+      const res = await fetch(`${getApiBase()}/api/benchmark`);
       if (res.ok) setBenchmarkData(await res.json());
     } catch (err) {}
   };
@@ -385,7 +399,7 @@ export default function App() {
   const runBenchmarkSuite = async () => {
     setIsBenchmarking(true);
     try {
-      const res = await fetch(`${API_BASE}/api/benchmark`);
+      const res = await fetch(`${getApiBase()}/api/benchmark`);
       if (res.ok) setBenchmarkData(await res.json());
     } finally {
       setIsBenchmarking(false);
@@ -682,7 +696,7 @@ export default function App() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 45000);
 
-      const res = await fetch(`${API_BASE}/api/chat`, {
+      const res = await fetch(`${getApiBase()}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
@@ -1628,6 +1642,75 @@ export default function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--text-tertiary)' }}>Quantization</span>
                   <span style={{ color: 'var(--success)' }}>FP16 Native</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="workspace-panel" style={{ gridColumn: 'span 2' }}>
+              <div className="panel-header">
+                <span className="panel-title">
+                  <Cpu size={15} /> Backend API Server Connection (Vercel & Remote Deployment)
+                </span>
+                <span className="badge-tag" style={{ color: systemStatus ? 'var(--success)' : 'var(--danger)' }}>
+                  {systemStatus ? '● Connected' : '○ Disconnected'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.82rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Active API Base</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 600 }}>
+                    {getApiBase() || '(Same Origin / Local Server)'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    value={backendInput}
+                    onChange={(e) => setBackendInput(e.target.value)}
+                    placeholder="e.g. http://localhost:8000 or https://xxxx.ngrok-free.app"
+                    style={{
+                      flex: 1,
+                      padding: '0.45rem 0.75rem',
+                      fontSize: '0.8rem',
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      color: 'var(--text-primary)',
+                      fontFamily: 'var(--font-mono)'
+                    }}
+                  />
+                  <button
+                    className="toolbar-btn"
+                    onClick={() => {
+                      const trimmed = backendInput.trim();
+                      if (trimmed) {
+                        localStorage.setItem('minivlm_backend_url', trimmed);
+                        setBackendUrl(trimmed);
+                      } else {
+                        localStorage.removeItem('minivlm_backend_url');
+                        setBackendUrl('');
+                      }
+                      fetchSystemStatus();
+                    }}
+                  >
+                    Save & Test
+                  </button>
+                  {backendUrl && (
+                    <button
+                      className="toolbar-btn"
+                      onClick={() => {
+                        localStorage.removeItem('minivlm_backend_url');
+                        setBackendUrl('');
+                        setBackendInput('');
+                        fetchSystemStatus();
+                      }}
+                    >
+                      Reset Default
+                    </button>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.73rem', color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
+                  Deploying on <strong>Vercel</strong>? Vercel hosts the React frontend. Run <code>python share_public.py</code> (ngrok) or your cloud GPU server, and paste its URL above to connect your deep learning model live!
                 </div>
               </div>
             </div>
