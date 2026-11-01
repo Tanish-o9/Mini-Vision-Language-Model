@@ -19,7 +19,39 @@ import {
 } from 'lucide-react';
 import './App.css';
 
-const API_BASE = 'http://localhost:8000';
+// Automatically adapt API_BASE whether running under Vite dev (5173) or FastAPI production (8000)
+const API_BASE = window.location.port === '5173' ? 'http://localhost:8000' : '';
+
+// Client-side image optimizer: compresses photos to max 800px to ensure instantaneous uploads
+const compressImageFile = (file, maxWidth = 800, quality = 0.85) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('playground');
@@ -42,6 +74,7 @@ export default function App() {
   ]);
   const [inputQuestion, setInputQuestion] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [maxTokens, setMaxTokens] = useState(80);
 
   const fileInputRef = useRef(null);
@@ -57,6 +90,20 @@ export default function App() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory, isGenerating]);
+
+  // Live seconds elapsed counter while Qwen is thinking
+  useEffect(() => {
+    let timer;
+    if (isGenerating) {
+      setElapsedSeconds(0);
+      timer = setInterval(() => {
+        setElapsedSeconds((prev) => Math.round((prev + 0.1) * 10) / 10);
+      }, 100);
+    } else {
+      clearInterval(timer);
+    }
+    return () => clearInterval(timer);
+  }, [isGenerating]);
 
   const fetchSystemStatus = async () => {
     try {
@@ -121,15 +168,21 @@ export default function App() {
     }
   };
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-        setSelectedImage(reader.result);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const optimized = await compressImageFile(file);
+        setImagePreview(optimized);
+        setSelectedImage(optimized);
+      } catch {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreview(reader.result);
+          setSelectedImage(reader.result);
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -166,9 +219,13 @@ export default function App() {
     }
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
       const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           image_base64: selectedImage,
           secondary_image_base64: isCompareMode ? secondaryImage : null,
@@ -178,6 +235,7 @@ export default function App() {
           stage: 'stage2'
         })
       });
+      clearTimeout(timeoutId);
 
       if (res.ok) {
         const data = await res.json();
@@ -192,22 +250,20 @@ export default function App() {
           }
         ]);
       } else {
-        throw new Error('Server returned an error');
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `Server status ${res.status}`);
       }
-    } catch {
-      // Fallback demo response if server is offline
-      setTimeout(() => {
-        setChatHistory((prev) => [
-          ...prev,
-          {
-            role: 'bot',
-            content: `In this image, I can observe key visual elements aligned with your query "${q}". The visual tokens extracted via CLIP penultimate layer match the spatial regions described.`,
-            time: new Date().toLocaleTimeString(),
-            latency: 0.142,
-            device: 'cuda'
-          }
-        ]);
-      }, 500);
+    } catch (err) {
+      setChatHistory((prev) => [
+        ...prev,
+        {
+          role: 'bot',
+          content: `⚠️ Inference Notice: ${err.message || 'Request timed out'}. Ensure server is running at localhost:8000.`,
+          time: new Date().toLocaleTimeString(),
+          latency: 0,
+          device: 'system'
+        }
+      ]);
     } finally {
       setIsGenerating(false);
     }
@@ -358,15 +414,21 @@ export default function App() {
                     ref={secondFileInputRef}
                     style={{ display: 'none' }}
                     accept="image/*"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          setSecondaryPreview(reader.result);
-                          setSecondaryImage(reader.result);
-                        };
-                        reader.readAsDataURL(file);
+                        try {
+                          const optimized = await compressImageFile(file);
+                          setSecondaryPreview(optimized);
+                          setSecondaryImage(optimized);
+                        } catch {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setSecondaryPreview(reader.result);
+                            setSecondaryImage(reader.result);
+                          };
+                          reader.readAsDataURL(file);
+                        }
                       }
                     }}
                   />
@@ -457,7 +519,8 @@ export default function App() {
                       <Eye size={16} />
                     </div>
                     <div className="bubble-content" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#94a3b8' }}>
-                      <RefreshCw size={14} className="spin" /> Generating response via Qwen...
+                      <RefreshCw size={14} className="spin" />
+                      <span>Generating response via Qwen ({elapsedSeconds.toFixed(1)}s)...</span>
                     </div>
                   </div>
                 )}
