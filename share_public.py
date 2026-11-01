@@ -41,7 +41,7 @@ def start_tunnel(port=8000):
     print(f"Starting Secure Public HTTPS Tunnel for Mini-VLM on port {port}...")
     print("=" * 65)
 
-    cmd = [bin_path, "tunnel", "--url", f"http://localhost:{port}"]
+    cmd = [bin_path, "tunnel", "--protocol", "http2", "--url", f"http://localhost:{port}"]
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -59,7 +59,7 @@ def start_tunnel(port=8000):
         if match:
             tunnel_url = match.group(0)
             print("\n" + "*" * 65)
-            print(f"  🚀 YOUR LIVE PUBLIC DEMO URL IS READY:")
+            print(f"  [ONLINE] YOUR LIVE PUBLIC DEMO URL IS READY:")
             print(f"     {tunnel_url}")
             print("*" * 65)
             print("Share this link with anyone to test Mini-VLM from their phone or PC!\n")
@@ -73,6 +73,11 @@ def start_tunnel(port=8000):
         process.terminate()
 
 if __name__ == "__main__":
+    if sys.stdout.encoding != 'utf-8':
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except Exception:
+            pass
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     start_tunnel(port)
 

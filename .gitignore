@@ -33,6 +33,9 @@ node_modules/
 frontend/node_modules/
 .npm/
 
+# Downloaded tools
+.tools/
+
 # IDE & Editor files
 .vscode/
 .idea/

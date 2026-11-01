@@ -35,9 +35,17 @@ import {
 } from 'lucide-react';
 import './App.css';
 
-// Automatically adapt API_BASE whether running under Vite dev (5173), custom remote backend URL, or FastAPI production (8000)
+// Automatically adapt API_BASE whether running under Vite dev (5173), query param (?backend=), custom remote backend URL, or FastAPI production (8000)
 const getApiBase = () => {
   if (typeof window === 'undefined') return '';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const backendParam = params.get('backend') || params.get('api');
+    if (backendParam) {
+      localStorage.setItem('minivlm_backend_url', backendParam.trim());
+      return backendParam.trim().replace(/\/$/, '');
+    }
+  } catch {}
   const custom = localStorage.getItem('minivlm_backend_url');
   if (custom && custom.trim()) return custom.trim().replace(/\/$/, '');
   if (import.meta.env?.VITE_API_URL) return import.meta.env.VITE_API_URL.replace(/\/$/, '');
@@ -286,6 +294,7 @@ export default function App() {
   const [backendInput, setBackendInput] = useState(() => {
     try { return localStorage.getItem('minivlm_backend_url') || ''; } catch { return ''; }
   });
+  const [showBackendModal, setShowBackendModal] = useState(false);
   const [selectedArchNode, setSelectedArchNode] = useState(null);
   const [activePreset, setActivePreset] = useState(null);
 
@@ -731,19 +740,28 @@ export default function App() {
         ]);
       } else {
         const errData = await res.json().catch(() => ({}));
+        if (res.status === 405 || res.status === 404) {
+          throw new Error('Vercel frontend is not connected to a GPU backend yet. Click "Connect GPU" in the top bar to connect your live model.');
+        }
         throw new Error(errData.detail || `Server status ${res.status}`);
       }
     } catch (err) {
+      const isBackendMissing = err.message && (err.message.includes('not connected') || err.message.includes('405') || err.message.includes('Failed to fetch') || err.message.includes('NetworkError'));
       setChatHistory((prev) => [
         ...prev,
         {
           role: 'bot',
-          content: `Inference Error: ${err.message || 'Request timed out'}. Check backend on port 8000.`,
+          content: isBackendMissing
+            ? `🔌 **GPU Backend Disconnected**\n\nVercel hosts this web frontend. To run real-time vision inference on your GPU:\n- Click **'Connect GPU'** in the top bar and paste your Cloudflare/ngrok HTTPS tunnel URL.\n- Or run **\`python share_public.py\`** in your local project terminal.`
+            : `Inference Error: ${err.message || 'Request timed out'}. Check backend on port 8000.`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           latency: 0,
           device: 'system'
         }
       ]);
+      if (isBackendMissing) {
+        setShowBackendModal(true);
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -821,10 +839,28 @@ export default function App() {
             />
           </div>
 
-          <div className="system-status-pill">
-            <span className="status-dot"></span>
-            <span>{systemStatus?.device?.toUpperCase() || 'CUDA'} FP16</span>
-          </div>
+          <button
+            className="system-status-pill"
+            style={{
+              cursor: 'pointer',
+              border: systemStatus ? '1px solid rgba(16, 185, 129, 0.35)' : '1px solid rgba(239, 68, 68, 0.45)',
+              background: systemStatus ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.12)',
+              color: systemStatus ? '#34d399' : '#f87171'
+            }}
+            onClick={() => setShowBackendModal(true)}
+            title="Click to configure GPU backend endpoint"
+          >
+            <span
+              className="status-dot"
+              style={{
+                background: systemStatus ? '#10b981' : '#ef4444',
+                boxShadow: systemStatus ? '0 0 6px #10b981' : '0 0 6px #ef4444'
+              }}
+            ></span>
+            <span>
+              {systemStatus ? `${systemStatus.device?.toUpperCase() || 'CUDA'} FP16` : 'Connect GPU'}
+            </span>
+          </button>
           <button
             className="icon-btn"
             onClick={fetchSystemStatus}
@@ -1749,6 +1785,86 @@ export default function App() {
       {lightboxSrc && (
         <div className="modal-overlay" onClick={() => setLightboxSrc(null)}>
           <img src={lightboxSrc} alt="Enlarged" style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: '10px' }} />
+        </div>
+      )}
+
+      {/* Backend GPU Connection Modal (for Vercel & Remote Hosting) */}
+      {showBackendModal && (
+        <div className="modal-overlay" onClick={() => setShowBackendModal(false)}>
+          <div className="camera-card" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.45rem', color: 'var(--text-primary)' }}>
+                <Cpu size={16} color="var(--accent)" /> Connect GPU Backend to Vercel
+              </span>
+              <button onClick={() => setShowBackendModal(false)} className="icon-btn">
+                <X size={16} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem', lineHeight: 1.5 }}>
+              Vercel hosts the web frontend. To run vision reasoning with PyTorch on your GPU, enter your Cloudflare Tunnel, ngrok, or cloud endpoint below.
+            </p>
+
+            <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.76rem', marginBottom: '0.9rem', color: 'var(--text-secondary)' }}>
+              <div style={{ fontWeight: 600, color: 'var(--accent)', marginBottom: '0.25rem' }}>Local Machine Command:</div>
+              <code>python share_public.py</code> (creates a free instant HTTPS tunnel)
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <input
+                type="text"
+                value={backendInput}
+                onChange={(e) => setBackendInput(e.target.value)}
+                placeholder="https://xxxx.trycloudflare.com or http://localhost:8000"
+                style={{
+                  flex: 1,
+                  padding: '0.5rem 0.75rem',
+                  fontSize: '0.82rem',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-mono)'
+                }}
+              />
+              <button
+                className="send-btn"
+                style={{ padding: '0 1rem', fontSize: '0.8rem' }}
+                onClick={() => {
+                  const val = backendInput.trim();
+                  if (val) {
+                    localStorage.setItem('minivlm_backend_url', val);
+                    setBackendUrl(val);
+                  } else {
+                    localStorage.removeItem('minivlm_backend_url');
+                    setBackendUrl('');
+                  }
+                  fetchSystemStatus();
+                  setShowBackendModal(false);
+                }}
+              >
+                Connect
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                className="toolbar-btn"
+                onClick={() => {
+                  localStorage.removeItem('minivlm_backend_url');
+                  setBackendUrl('');
+                  setBackendInput('');
+                  fetchSystemStatus();
+                  setShowBackendModal(false);
+                }}
+              >
+                Reset Default
+              </button>
+              <button className="toolbar-btn" onClick={() => setShowBackendModal(false)}>
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
