@@ -108,12 +108,12 @@ class MiniVLM(nn.Module):
         """Precompute text embeddings for fine-grained everyday visual concepts with calibrated CLIP scale."""
         self.vocab_concepts = [
             # Fruits & Foods
-            "an apple", "a red apple", "a hand holding an apple", "a banana", "an orange fruit",
-            "a mango", "strawberries", "grapes", "a watermelon", "a tomato", "fresh vegetables",
-            "a pizza", "a burger or sandwich", "pasta or noodles", "a plate of food or meal",
-            "bread or bakery food", "a cake or sweet dessert", "a cup of coffee or tea", "a drink or beverage bottle",
+            "an apple", "a banana", "an orange fruit", "a mango", "strawberries", "grapes",
+            "a watermelon", "a tomato", "fresh vegetables", "a pizza", "a burger or sandwich",
+            "pasta or noodles", "a plate of food or meal", "bread or bakery food",
+            "a cake or sweet dessert", "a cup of coffee or tea", "a drink or beverage bottle",
             # Clothing & Fashion
-            "a t-shirt or casual shirt", "a blue t-shirt", "a jacket, coat, or hoodie",
+            "a t-shirt or casual shirt", "a jacket, coat, or hoodie",
             "pants, jeans, or trousers", "shoes, sneakers, or footwear", "a dress or gown",
             "a watch on wrist", "glasses or eyewear", "a hat or cap", "a handbag or backpack",
             # Animals & Nature
@@ -122,7 +122,7 @@ class MiniVLM(nn.Module):
             "trees, plants, or green foliage", "outdoor landscape or scenery", "a beach and ocean water",
             "the sky and clouds", "mountains or hills",
             # People & Portraits
-            "a human hand holding an object", "a person or human portrait", "a man", "a woman", "a child or kid",
+            "a hand holding an object", "a person or human portrait", "a man", "a woman", "a child or kid",
             # Technology & Electronics
             "a smartphone or mobile phone", "a laptop computer", "a computer monitor display",
             "headphones or audio earphones", "a television screen", "a camera",
@@ -175,21 +175,29 @@ class MiniVLM(nn.Module):
                 sim_c = (img_feat @ self.text_feat_concepts.to(dtype=self.dtype).T)[0]
                 probs_c = (sim_c * scale).softmax(dim=-1)
 
-                top_indices = torch.topk(probs_c, k=3).indices.tolist()
-                matched = [self.vocab_concepts[i] for i in top_indices if probs_c[i].item() >= 0.04]
+                top_k = torch.topk(probs_c, k=3)
+                top_indices = top_k.indices.tolist()
+                top_probs = top_k.values.tolist()
+
+                p0 = top_probs[0]
+                primary = self.vocab_concepts[top_indices[0]]
 
                 # Dominant color probability distribution
                 sim_col = (img_feat @ self.text_feat_colors.to(dtype=self.dtype).T)[0]
                 probs_col = (sim_col * scale).softmax(dim=-1)
                 top_col_idx = torch.argmax(probs_col).item()
-                top_col = self.vocab_colors[top_col_idx] if probs_col[top_col_idx].item() >= 0.12 else None
+                top_col = self.vocab_colors[top_col_idx] if probs_col[top_col_idx].item() >= 0.15 else None
 
-                parts = []
-                if matched:
-                    primary = matched[0]
-                    parts.append(f"Primary subject: {primary}")
-                    if len(matched) > 1 and matched[1] not in primary:
-                        parts.append(f"Visual details: {matched[1]}")
+                parts = [f"Primary subject: {primary}"]
+
+                # Only include secondary details if statistically prominent (>= 15% and not overshadowed 3x)
+                if len(top_probs) > 1:
+                    p1 = top_probs[1]
+                    if p1 >= 0.15 and p0 < 3.0 * p1:
+                        secondary = self.vocab_concepts[top_indices[1]]
+                        if secondary not in primary and primary not in secondary:
+                            parts.append(f"Visual details: {secondary}")
+
                 if top_col:
                     parts.append(f"Color: {top_col}")
 
