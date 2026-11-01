@@ -59,19 +59,35 @@ export default function App() {
   const [metrics, setMetrics] = useState({ stage1: [], stage2: [] });
   const [config, setConfig] = useState(null);
 
-  // Chat Playground State
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
-  const [isCompareMode, setIsCompareMode] = useState(false);
-  const [secondaryImage, setSecondaryImage] = useState(null);
-  const [secondaryPreview, setSecondaryPreview] = useState(null);
-  const [chatHistory, setChatHistory] = useState([
-    {
-      role: 'bot',
-      content: 'Hello! I am your Mini Vision-Language Assistant. Upload an image (or switch to Compare Mode) and ask me questions!',
-      time: 'Just now'
-    }
-  ]);
+  // Chat Playground State with LocalStorage persistence across page refreshes
+  const [selectedImage, setSelectedImage] = useState(() => {
+    try { return localStorage.getItem('minivlm_image') || null; } catch { return null; }
+  });
+  const [imagePreview, setImagePreview] = useState(() => {
+    try { return localStorage.getItem('minivlm_image') || null; } catch { return null; }
+  });
+  const [isCompareMode, setIsCompareMode] = useState(() => {
+    try { return localStorage.getItem('minivlm_compare_mode') === 'true'; } catch { return false; }
+  });
+  const [secondaryImage, setSecondaryImage] = useState(() => {
+    try { return localStorage.getItem('minivlm_secondary_image') || null; } catch { return null; }
+  });
+  const [secondaryPreview, setSecondaryPreview] = useState(() => {
+    try { return localStorage.getItem('minivlm_secondary_image') || null; } catch { return null; }
+  });
+  const [chatHistory, setChatHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem('minivlm_chat_history');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [
+      {
+        role: 'bot',
+        content: 'Hello! I am your Mini Vision-Language Assistant. Upload an image (or switch to Compare Mode) and ask me questions!',
+        time: 'Just now'
+      }
+    ];
+  });
   const [inputQuestion, setInputQuestion] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -90,6 +106,30 @@ export default function App() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory, isGenerating]);
+
+  // Persist chat history to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('minivlm_chat_history', JSON.stringify(chatHistory));
+    } catch {}
+  }, [chatHistory]);
+
+  // Persist primary image to localStorage
+  useEffect(() => {
+    try {
+      if (selectedImage) localStorage.setItem('minivlm_image', selectedImage);
+      else localStorage.removeItem('minivlm_image');
+    } catch {}
+  }, [selectedImage]);
+
+  // Persist compare mode & secondary image to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('minivlm_compare_mode', String(isCompareMode));
+      if (secondaryImage) localStorage.setItem('minivlm_secondary_image', secondaryImage);
+      else localStorage.removeItem('minivlm_secondary_image');
+    } catch {}
+  }, [isCompareMode, secondaryImage]);
 
   // Live seconds elapsed counter while Qwen is thinking
   useEffect(() => {
@@ -187,13 +227,17 @@ export default function App() {
   };
 
   const handleClearChat = () => {
-    setChatHistory([
+    const initial = [
       {
         role: 'bot',
         content: 'Chat conversation reset. Feel free to upload an image and ask a question.',
         time: 'Just now'
       }
-    ]);
+    ];
+    setChatHistory(initial);
+    try {
+      localStorage.setItem('minivlm_chat_history', JSON.stringify(initial));
+    } catch {}
   };
 
   const handleSendMessage = async (customPrompt = null) => {
