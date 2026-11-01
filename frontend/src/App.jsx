@@ -10,11 +10,7 @@ import {
   Settings,
   RefreshCw,
   Sparkles,
-  Zap,
-  CheckCircle2,
-  Activity,
   Maximize2,
-  Clock,
   HardDrive,
   Mic,
   MicOff,
@@ -26,14 +22,15 @@ import {
   X,
   Copy,
   Check,
-  Image as ImageIcon
+  ChevronRight,
+  Sliders
 } from 'lucide-react';
 import './App.css';
 
 // Automatically adapt API_BASE whether running under Vite dev (5173) or FastAPI production (8000)
 const API_BASE = window.location.port === '5173' ? 'http://localhost:8000' : '';
 
-// Client-side image optimizer: compresses photos to max 800px to ensure instantaneous uploads
+// Client-side image optimizer
 const compressImageFile = (file, maxWidth = 800, quality = 0.85) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -64,13 +61,22 @@ const compressImageFile = (file, maxWidth = 800, quality = 0.85) => {
   });
 };
 
+// Preset high-resolution real photographs (Zero cartoon doodles)
+const PRESET_SAMPLES = [
+  { id: 'apple', title: 'Apple', url: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&q=80' },
+  { id: 'dog', title: 'Puppy', url: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=400&q=80' },
+  { id: 'car', title: 'Sports Car', url: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=400&q=80' },
+  { id: 'pizza', title: 'Pizza', url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400&q=80' },
+  { id: 'tshirt', title: 'T-Shirt', url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=400&q=80' }
+];
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('playground');
   const [systemStatus, setSystemStatus] = useState(null);
   const [metrics, setMetrics] = useState({ stage1: [], stage2: [] });
   const [config, setConfig] = useState(null);
 
-  // Chat Playground State with LocalStorage persistence across page refreshes
+  // Playground state
   const [selectedImage, setSelectedImage] = useState(() => {
     try { return localStorage.getItem('minivlm_image') || null; } catch { return null; }
   });
@@ -98,8 +104,8 @@ export default function App() {
     return [
       {
         role: 'bot',
-        content: 'Hello! I am your Mini Vision-Language Assistant. Upload an image, use the live camera, or choose a preset below to begin our visual dialogue!',
-        time: 'Just now'
+        content: 'Mini-VLM Studio initialized. Upload an image or select a benchmark sample to begin visual reasoning.',
+        time: 'Ready'
       }
     ];
   });
@@ -108,7 +114,7 @@ export default function App() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [maxTokens, setMaxTokens] = useState(80);
 
-  // Voice & Audio State
+  // Audio / Voice state
   const [isRecording, setIsRecording] = useState(false);
   const [voiceLang, setVoiceLang] = useState('hi-IN');
   const [speakingIndex, setSpeakingIndex] = useState(null);
@@ -142,14 +148,11 @@ export default function App() {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory, isGenerating]);
 
-  // Persist chat history to localStorage
+  // Persist state to localStorage
   useEffect(() => {
-    try {
-      localStorage.setItem('minivlm_chat_history', JSON.stringify(chatHistory));
-    } catch {}
+    try { localStorage.setItem('minivlm_chat_history', JSON.stringify(chatHistory)); } catch {}
   }, [chatHistory]);
 
-  // Persist primary image to localStorage
   useEffect(() => {
     try {
       if (selectedImage) localStorage.setItem('minivlm_image', selectedImage);
@@ -157,7 +160,6 @@ export default function App() {
     } catch {}
   }, [selectedImage]);
 
-  // Persist cues
   useEffect(() => {
     try {
       if (latestVisualCues) localStorage.setItem('minivlm_cues', latestVisualCues);
@@ -165,7 +167,6 @@ export default function App() {
     } catch {}
   }, [latestVisualCues]);
 
-  // Persist compare mode & secondary image to localStorage
   useEffect(() => {
     try {
       localStorage.setItem('minivlm_compare_mode', String(isCompareMode));
@@ -174,7 +175,7 @@ export default function App() {
     } catch {}
   }, [isCompareMode, secondaryImage]);
 
-  // Live seconds elapsed counter while Qwen is thinking
+  // Live timer during generation
   useEffect(() => {
     let timer;
     if (isGenerating) {
@@ -192,55 +193,45 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/api/status`);
       if (res.ok) setSystemStatus(await res.json());
-    } catch (err) {
-      console.warn('Backend status check:', err);
-    }
+    } catch (err) {}
   };
 
   const fetchMetrics = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/metrics`);
       if (res.ok) setMetrics(await res.json());
-    } catch (err) {
-      console.warn('Metrics check:', err);
-    }
+    } catch (err) {}
   };
 
   const fetchConfig = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/config`);
       if (res.ok) setConfig(await res.json());
-    } catch (err) {
-      console.warn('Config check:', err);
-    }
+    } catch (err) {}
   };
 
   const fetchBenchmark = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/benchmark`);
       if (res.ok) setBenchmarkData(await res.json());
-    } catch (err) {
-      console.warn('Benchmark check:', err);
-    }
+    } catch (err) {}
   };
 
   const runBenchmarkSuite = async () => {
     setIsBenchmarking(true);
     try {
       const res = await fetch(`${API_BASE}/api/benchmark`);
-      if (res.ok) {
-        setBenchmarkData(await res.json());
-      }
+      if (res.ok) setBenchmarkData(await res.json());
     } finally {
       setIsBenchmarking(false);
     }
   };
 
-  // Voice Input (Web Speech Recognition)
+  // Voice Recognition
   const toggleVoiceInput = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert('Voice recognition is not supported in this browser. Please use Chrome, Edge, or Brave.');
+      alert('Speech recognition is not supported in this browser. Please use Chrome, Edge, or Brave.');
       return;
     }
 
@@ -263,21 +254,17 @@ export default function App() {
           .join('');
         setInputQuestion(transcript);
       };
-      recognition.onerror = (e) => {
-        console.warn('Speech error:', e);
-        setIsRecording(false);
-      };
+      recognition.onerror = () => setIsRecording(false);
       recognition.onend = () => setIsRecording(false);
 
       recognitionRef.current = recognition;
       recognition.start();
     } catch (e) {
-      console.error(e);
       setIsRecording(false);
     }
   };
 
-  // Text to Speech (TTS)
+  // Text to Speech
   const toggleSpeech = (text, index) => {
     if (!('speechSynthesis' in window)) return;
     if (speakingIndex === index) {
@@ -314,7 +301,7 @@ export default function App() {
         videoRef.current.srcObject = stream;
       }
     } catch (err) {
-      alert('Unable to access camera: ' + err.message);
+      alert('Camera access failed: ' + err.message);
       setIsCameraOpen(false);
     }
   };
@@ -342,114 +329,21 @@ export default function App() {
     stopCamera();
   };
 
-  // Interactive Preset Image Generator
-  const loadPresetSample = (type) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 400;
-    canvas.height = 400;
-    const ctx = canvas.getContext('2d');
-
-    if (type === 'apple') {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, 400, 400);
-      // Apple shape
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.arc(175, 220, 85, 0, Math.PI * 2);
-      ctx.arc(225, 220, 85, 0, Math.PI * 2);
-      ctx.fill();
-      // Stem & Leaf
-      ctx.fillStyle = '#15803d';
-      ctx.fillRect(195, 110, 10, 45);
-      ctx.beginPath();
-      ctx.ellipse(225, 125, 25, 12, Math.PI / 4, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (type === 'car') {
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(0, 0, 400, 400);
-      // Blue sports car body
-      ctx.fillStyle = '#2563eb';
-      ctx.beginPath();
-      ctx.roundRect(80, 200, 240, 70, [15, 45, 10, 10]);
-      ctx.fill();
-      ctx.fillStyle = '#60a5fa';
-      ctx.beginPath();
-      ctx.roundRect(140, 155, 130, 50, [25, 25, 0, 0]);
-      ctx.fill();
-      // Wheels
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(130, 275, 26, 0, Math.PI * 2);
-      ctx.arc(270, 275, 26, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (type === 'pizza') {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, 400, 400);
-      // Crust
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.arc(200, 200, 120, 0, Math.PI * 2);
-      ctx.fill();
-      // Cheese
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(200, 200, 100, 0, Math.PI * 2);
-      ctx.fill();
-      // Pepperoni slices
-      ctx.fillStyle = '#b91c1c';
-      [[160, 160], [240, 160], [200, 210], [165, 245], [235, 245]].forEach(([x, y]) => {
-        ctx.beginPath();
-        ctx.arc(x, y, 16, 0, Math.PI * 2);
-        ctx.fill();
-      });
-    } else if (type === 'tshirt') {
-      ctx.fillStyle = '#f1f5f9';
-      ctx.fillRect(0, 0, 400, 400);
-      // Blue T-Shirt
-      ctx.fillStyle = '#0284c7';
-      ctx.beginPath();
-      ctx.moveTo(130, 120);
-      ctx.lineTo(80, 170);
-      ctx.lineTo(110, 205);
-      ctx.lineTo(140, 180);
-      ctx.lineTo(140, 310);
-      ctx.lineTo(260, 310);
-      ctx.lineTo(260, 180);
-      ctx.lineTo(290, 205);
-      ctx.lineTo(320, 170);
-      ctx.lineTo(270, 120);
-      ctx.closePath();
-      ctx.fill();
-    } else if (type === 'dog') {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, 400, 400);
-      // Puppy Head
-      ctx.fillStyle = '#f8fafc';
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(200, 210, 80, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      // Ears
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.ellipse(135, 170, 30, 45, -Math.PI / 6, 0, Math.PI * 2);
-      ctx.ellipse(265, 170, 30, 45, Math.PI / 6, 0, Math.PI * 2);
-      ctx.fill();
-      // Eyes & Nose
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(175, 195, 8, 0, Math.PI * 2);
-      ctx.arc(225, 195, 8, 0, Math.PI * 2);
-      ctx.arc(200, 225, 12, 0, Math.PI * 2);
-      ctx.fill();
+  // Load Real Photo Preset
+  const loadPresetPhoto = async (url) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+        setSelectedImage(reader.result);
+        setLatestVisualCues('');
+      };
+      reader.readAsDataURL(blob);
+    } catch (err) {
+      console.warn('Preset fetch notice:', err);
     }
-
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-    setImagePreview(dataUrl);
-    setSelectedImage(dataUrl);
-    setLatestVisualCues('');
   };
 
   // Image Upload handler
@@ -478,36 +372,28 @@ export default function App() {
     const initial = [
       {
         role: 'bot',
-        content: 'Chat conversation reset. Feel free to upload an image and ask a question.',
-        time: 'Just now'
+        content: 'Conversation cleared. Upload an image to start a new analysis.',
+        time: 'Ready'
       }
     ];
     setChatHistory(initial);
-    try {
-      localStorage.setItem('minivlm_chat_history', JSON.stringify(initial));
-    } catch {}
-  };
-
-  // Export Report (PDF Print Mode)
-  const handleExportReport = () => {
-    window.print();
+    try { localStorage.setItem('minivlm_chat_history', JSON.stringify(initial)); } catch {}
   };
 
   const handleSendMessage = async (customPrompt = null) => {
     const q = customPrompt || inputQuestion;
     if (!q.trim()) return;
     if (!selectedImage) {
-      alert('Please upload or select an image first!');
+      alert('Please upload or select an image first.');
       return;
     }
 
-    const userMessage = { role: 'user', content: q, time: new Date().toLocaleTimeString() };
+    const userMessage = { role: 'user', content: q, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
     const updatedHistory = [...chatHistory, userMessage];
     setChatHistory(updatedHistory);
     setInputQuestion('');
     setIsGenerating(true);
 
-    // Format history pairs for backend
     const apiHistory = [];
     for (let i = 0; i < updatedHistory.length - 1; i += 2) {
       const u = updatedHistory[i]?.role === 'user' ? updatedHistory[i].content : '';
@@ -543,8 +429,8 @@ export default function App() {
           ...prev,
           {
             role: 'bot',
-            content: data.answer || 'No answer generated.',
-            time: new Date().toLocaleTimeString(),
+            content: data.answer || 'No output generated.',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             latency: data.latency_seconds,
             device: data.device
           }
@@ -558,8 +444,8 @@ export default function App() {
         ...prev,
         {
           role: 'bot',
-          content: `⚠️ Inference Notice: ${err.message || 'Request timed out'}. Ensure server is running at localhost:8000.`,
-          time: new Date().toLocaleTimeString(),
+          content: `Inference Error: ${err.message || 'Request timed out'}. Check backend on port 8000.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           latency: 0,
           device: 'system'
         }
@@ -575,15 +461,12 @@ export default function App() {
       <header className="top-nav">
         <div className="brand-section">
           <div className="brand-logo">
-            <Eye size={22} />
+            <Eye size={18} strokeWidth={2.2} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span className="brand-title">Mini-VLM Studio</span>
-              <span className="badge-tag">LLaVA-1.5 Style</span>
-            </div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-              CLIP ViT-B/32 + MLP Projector + Qwen2.5-0.5B
+              <span className="badge-tag">LLaVA-1.5</span>
             </div>
           </div>
         </div>
@@ -593,46 +476,45 @@ export default function App() {
             className={`tab-btn ${activeTab === 'playground' ? 'active' : ''}`}
             onClick={() => setActiveTab('playground')}
           >
-            <Sparkles size={16} /> Playground
+            Playground
           </button>
           <button
             className={`tab-btn ${activeTab === 'benchmark' ? 'active' : ''}`}
             onClick={() => setActiveTab('benchmark')}
           >
-            <Award size={16} /> Benchmark
+            Benchmark
           </button>
           <button
             className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
             onClick={() => setActiveTab('analytics')}
           >
-            <BarChart2 size={16} /> Training Analytics
+            Analytics
           </button>
           <button
             className={`tab-btn ${activeTab === 'architecture' ? 'active' : ''}`}
             onClick={() => setActiveTab('architecture')}
           >
-            <Layers size={16} /> Architecture
+            Architecture
           </button>
           <button
             className={`tab-btn ${activeTab === 'system' ? 'active' : ''}`}
             onClick={() => setActiveTab('system')}
           >
-            <Cpu size={16} /> Diagnostics
+            Diagnostics
           </button>
         </nav>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           <div className="system-status-pill">
             <span className="status-dot"></span>
             <span>{systemStatus?.device?.toUpperCase() || 'CUDA'} FP16</span>
           </div>
           <button
-            className="tab-btn"
-            style={{ padding: '0.45rem', border: '1px solid var(--border-color)', borderRadius: '9px' }}
+            className="icon-btn"
             onClick={fetchSystemStatus}
-            title="Refresh System Status"
+            title="Refresh status"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={13} />
           </button>
         </div>
       </header>
@@ -642,74 +524,61 @@ export default function App() {
         {/* TAB 1: PLAYGROUND */}
         {activeTab === 'playground' && (
           <div className="playground-grid">
-            {/* Left Panel: Image Upload & Parameters */}
-            <div className="glass-card">
-              <div className="card-header">
-                <span className="card-title">
-                  <Upload size={18} color="var(--accent-cyan)" /> Visual Input
+            {/* Left Panel: Image Workspace & Inspector */}
+            <div className="workspace-panel">
+              <div className="panel-header">
+                <span className="panel-title">
+                  <Upload size={15} /> Visual Source
                 </span>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
                   <button
-                    className="tab-btn"
-                    style={{
-                      fontSize: '0.72rem',
-                      padding: '0.25rem 0.55rem',
-                      background: 'rgba(56, 189, 248, 0.1)',
-                      color: 'var(--accent-cyan)',
-                      border: '1px solid rgba(56, 189, 248, 0.25)'
-                    }}
+                    className="toolbar-btn"
                     onClick={startCamera}
-                    title="Capture photo from live webcam"
+                    title="Capture live webcam frame"
                   >
-                    <Camera size={13} /> Camera
+                    <Camera size={12} /> Camera
                   </button>
                   <button
-                    className="tab-btn"
-                    style={{
-                      fontSize: '0.72rem',
-                      padding: '0.25rem 0.55rem',
-                      background: isCompareMode ? 'rgba(129, 140, 248, 0.2)' : 'rgba(51, 65, 85, 0.4)',
-                      color: isCompareMode ? 'var(--accent-purple)' : 'var(--text-muted)',
-                      border: '1px solid var(--border-color)',
-                    }}
+                    className="toolbar-btn"
                     onClick={() => setIsCompareMode(!isCompareMode)}
+                    style={{ color: isCompareMode ? 'var(--accent)' : 'inherit' }}
                   >
-                    {isCompareMode ? '✔ Compare (2)' : '+ Compare'}
+                    {isCompareMode ? 'Compare (Active)' : 'Compare'}
                   </button>
                 </div>
               </div>
 
               {/* Primary Image Slot */}
-              <div style={{ marginBottom: isCompareMode ? '0.75rem' : '0' }}>
+              <div>
                 {imagePreview ? (
-                  <div className="preview-container" style={{ height: isCompareMode ? '135px' : '230px' }}>
-                    <img src={imagePreview} alt="Primary" className="preview-img" />
-                    <div className="preview-actions-bar">
+                  <div className="preview-container" style={{ height: isCompareMode ? '135px' : '220px' }}>
+                    <img src={imagePreview} alt="Selected visual input" className="preview-img" />
+                    <div className="preview-toolbar">
                       <button
-                        className="preview-action-btn"
+                        className="toolbar-btn"
                         onClick={() => setLightboxSrc(imagePreview)}
-                        title="Enlarge preview"
+                        title="View fullscreen"
                       >
                         <Maximize2 size={12} />
                       </button>
                       <button
-                        className="preview-action-btn danger"
+                        className="toolbar-btn danger"
                         onClick={() => {
                           setImagePreview(null);
                           setSelectedImage(null);
                           setLatestVisualCues('');
                         }}
-                        title="Remove image"
+                        title="Remove visual"
                       >
-                        <Trash2 size={12} /> Clear
+                        <Trash2 size={12} />
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="upload-dropzone" style={{ height: isCompareMode ? '135px' : '230px' }} onClick={() => fileInputRef.current?.click()}>
-                    <Upload size={28} color="var(--accent-cyan)" />
-                    <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>Upload or Drop Image</div>
-                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>PNG, JPG, WebP supported</div>
+                  <div className="upload-dropzone" style={{ height: isCompareMode ? '135px' : '220px' }} onClick={() => fileInputRef.current?.click()}>
+                    <Upload size={22} color="var(--text-secondary)" />
+                    <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>Drop image or browse</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>PNG, JPEG, WebP</div>
                   </div>
                 )}
                 <input
@@ -721,58 +590,61 @@ export default function App() {
                 />
               </div>
 
-              {/* Instant 1-Click Preset Samples */}
-              <div style={{ marginTop: '0.65rem' }}>
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  <ImageIcon size={12} /> Instant Presets:
-                </div>
-                <div className="preset-strip">
-                  <button className="preset-chip" onClick={() => loadPresetSample('apple')}>🍎 Apple</button>
-                  <button className="preset-chip" onClick={() => loadPresetSample('car')}>🚗 Sports Car</button>
-                  <button className="preset-chip" onClick={() => loadPresetSample('pizza')}>🍕 Pizza</button>
-                  <button className="preset-chip" onClick={() => loadPresetSample('tshirt')}>👕 T-Shirt</button>
-                  <button className="preset-chip" onClick={() => loadPresetSample('dog')}>🐶 Puppy</button>
+              {/* Real Photography Benchmark Presets */}
+              <div className="preset-section">
+                <div className="section-label">Evaluation Presets</div>
+                <div className="preset-grid">
+                  {PRESET_SAMPLES.map((p) => (
+                    <button
+                      key={p.id}
+                      className="preset-thumb-btn"
+                      onClick={() => loadPresetPhoto(p.url)}
+                      title={`Load ${p.title}`}
+                    >
+                      <img src={p.url} alt={p.title} className="preset-thumb-img" />
+                      <span className="preset-thumb-title">{p.title}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* Visual Grounding & Real-time Cues */}
+              {/* Visual Grounding / Semantic Inspector */}
               {latestVisualCues && (
-                <div className="grounding-panel">
-                  <div style={{ fontWeight: 700, color: 'var(--accent-cyan)', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <Eye size={13} /> Visual Grounding & Semantics:
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap' }}>
-                    {latestVisualCues.split('. ').map((part, pIdx) => (
-                      <span key={pIdx} className="grounding-tag">
-                        {part.startsWith('Primary subject') ? '🎯' : part.startsWith('Color') ? '🎨' : '🔍'} {part}
-                      </span>
-                    ))}
-                  </div>
+                <div className="inspector-panel">
+                  <div className="section-label" style={{ marginBottom: '0.35rem' }}>Visual Grounding Metadata</div>
+                  {latestVisualCues.split('. ').map((part, idx) => {
+                    const [k, v] = part.includes(':') ? part.split(':') : ['Tag', part];
+                    return (
+                      <div key={idx} className="inspector-row">
+                        <span className="inspector-label">{k.trim()}</span>
+                        <span className="inspector-value">{v ? v.trim() : ''}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
-              {/* Secondary Image Slot (Compare Mode) */}
+              {/* Compare Mode Slot */}
               {isCompareMode && (
-                <div style={{ marginTop: '0.5rem' }}>
+                <div style={{ marginTop: '0.75rem' }}>
                   {secondaryPreview ? (
                     <div className="preview-container" style={{ height: '135px' }}>
-                      <img src={secondaryPreview} alt="Secondary" className="preview-img" />
-                      <div className="preview-actions-bar">
+                      <img src={secondaryPreview} alt="Secondary visual" className="preview-img" />
+                      <div className="preview-toolbar">
                         <button
-                          className="preview-action-btn danger"
+                          className="toolbar-btn danger"
                           onClick={() => {
                             setSecondaryPreview(null);
                             setSecondaryImage(null);
                           }}
                         >
-                          <Trash2 size={12} /> Clear
+                          <Trash2 size={12} />
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div className="upload-dropzone" style={{ height: '135px' }} onClick={() => secondFileInputRef.current?.click()}>
-                      <Upload size={22} color="#818cf8" />
-                      <div style={{ fontWeight: 600, fontSize: '0.8rem', color: '#818cf8' }}>Upload Comparison Image (Image 2)</div>
+                      <div style={{ fontWeight: 600, fontSize: '0.78rem' }}>Upload Secondary Image</div>
                     </div>
                   )}
                   <input
@@ -801,11 +673,11 @@ export default function App() {
                 </div>
               )}
 
-              {/* Generation Controls */}
-              <div style={{ marginTop: '0.9rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.35rem' }}>
-                  <span style={{ color: '#94a3b8' }}>Max Response Tokens</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{maxTokens}</span>
+              {/* Generation Settings */}
+              <div style={{ marginTop: '0.85rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.3rem' }}>
+                  <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}>Max Tokens</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{maxTokens}</span>
                 </div>
                 <input
                   type="range"
@@ -814,109 +686,86 @@ export default function App() {
                   step="8"
                   value={maxTokens}
                   onChange={(e) => setMaxTokens(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: 'var(--accent-cyan)' }}
+                  style={{ width: '100%', accentColor: 'var(--accent)' }}
                 />
               </div>
 
-              {/* Quick Prompts */}
-              <div className="quick-prompts-title">
-                <Sparkles size={13} color="var(--accent-cyan)" /> Instant Prompts
-              </div>
-              <div className="quick-prompts-list">
-                {[
-                  'is photo me kya h??',
-                  'Describe this image in one clear sentence.',
-                  'What objects are visible in this scene?',
-                  'What colors are dominant in this picture?'
-                ].map((prompt, idx) => (
-                  <button
-                    key={idx}
-                    className="quick-prompt-chip"
-                    onClick={() => handleSendMessage(prompt)}
-                  >
-                    <span>💬</span> {prompt}
-                  </button>
-                ))}
+              {/* Prompt Suggestions */}
+              <div style={{ marginTop: '0.85rem' }}>
+                <div className="section-label">Standard Queries</div>
+                <div className="prompt-chips-list">
+                  {[
+                    'is photo me kya h??',
+                    'Describe this image in one concise sentence.',
+                    'What objects are visible in this scene?',
+                    'What colors are dominant in this picture?'
+                  ].map((prompt, idx) => (
+                    <button
+                      key={idx}
+                      className="prompt-chip"
+                      onClick={() => handleSendMessage(prompt)}
+                    >
+                      <span>{prompt}</span>
+                      <ChevronRight size={12} color="var(--text-tertiary)" />
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
             {/* Right Panel: Multimodal Chat Dialog */}
-            <div className="glass-card">
-              <div className="card-header">
-                <span className="card-title">
-                  <Sparkles size={18} color="var(--accent-purple)" /> Multimodal Dialogue
+            <div className="workspace-panel">
+              <div className="panel-header">
+                <span className="panel-title">
+                  <Sparkles size={15} /> Multimodal Dialogue
                 </span>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
                   <button
-                    onClick={handleExportReport}
-                    style={{
-                      background: 'rgba(56, 189, 248, 0.08)',
-                      border: '1px solid rgba(56, 189, 248, 0.25)',
-                      color: 'var(--accent-cyan)',
-                      padding: '0.35rem 0.65rem',
-                      borderRadius: '8px',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.35rem'
-                    }}
-                    title="Export visual inspection report to PDF"
+                    onClick={() => window.print()}
+                    className="toolbar-btn"
+                    title="Export conversation to PDF"
                   >
-                    <Download size={13} /> Export PDF
+                    <Download size={12} /> Export PDF
                   </button>
                   <button
                     onClick={handleClearChat}
-                    style={{
-                      background: 'transparent',
-                      border: '1px solid var(--border-color)',
-                      color: '#94a3b8',
-                      padding: '0.35rem 0.65rem',
-                      borderRadius: '8px',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer'
-                    }}
+                    className="toolbar-btn"
                   >
                     Clear History
                   </button>
                 </div>
               </div>
 
-              {/* Chat History Messages */}
+              {/* Chat History Window */}
               <div className="chat-window">
                 {chatHistory.map((msg, index) => (
-                  <div key={index} className={`chat-bubble ${msg.role}`}>
-                    <div className="bubble-avatar">
-                      {msg.role === 'user' ? 'U' : <Eye size={16} />}
+                  <div key={index} className={`message-item ${msg.role}`}>
+                    <div className="message-avatar">
+                      {msg.role === 'user' ? 'U' : <Eye size={14} />}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div className="bubble-content">{msg.content}</div>
-                      <div className="chat-meta">
+                      <div className="message-body">{msg.content}</div>
+                      <div className="message-footer">
                         <div>
                           <span>{msg.time}</span>
-                          {msg.latency && (
-                            <span style={{ color: 'var(--accent-cyan)' }}> • {msg.latency}s</span>
-                          )}
+                          {msg.latency && <span> • {msg.latency}s</span>}
                           {msg.device && <span> • {msg.device.toUpperCase()}</span>}
                         </div>
-                        <div className="meta-actions">
+                        <div className="footer-actions">
                           <button
-                            className="micro-btn"
+                            className="action-link"
                             onClick={() => copyMessageText(msg.content, index)}
-                            title="Copy message"
                           >
-                            {copiedIndex === index ? <Check size={12} color="var(--accent-green)" /> : <Copy size={12} />}
+                            {copiedIndex === index ? <Check size={11} color="var(--success)" /> : <Copy size={11} />}
                             {copiedIndex === index ? 'Copied' : 'Copy'}
                           </button>
                           {msg.role === 'bot' && (
                             <button
-                              className={`micro-btn ${speakingIndex === index ? 'active' : ''}`}
+                              className="action-link"
                               onClick={() => toggleSpeech(msg.content, index)}
-                              title={speakingIndex === index ? 'Stop audio' : 'Listen to answer'}
                             >
-                              {speakingIndex === index ? <VolumeX size={12} /> : <Volume2 size={12} />}
-                              {speakingIndex === index ? 'Speaking...' : 'Listen'}
+                              {speakingIndex === index ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                              {speakingIndex === index ? 'Stop' : 'Listen'}
                             </button>
                           )}
                         </div>
@@ -925,13 +774,13 @@ export default function App() {
                   </div>
                 ))}
                 {isGenerating && (
-                  <div className="chat-bubble bot">
-                    <div className="bubble-avatar">
-                      <Eye size={16} />
+                  <div className="message-item bot">
+                    <div className="message-avatar">
+                      <Eye size={14} />
                     </div>
-                    <div className="bubble-content" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#94a3b8' }}>
-                      <RefreshCw size={14} className="spin" />
-                      <span>Generating response via Qwen ({elapsedSeconds.toFixed(1)}s)...</span>
+                    <div className="message-body" style={{ color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <RefreshCw size={13} className="spin" />
+                      <span>Generating multimodal answer ({elapsedSeconds.toFixed(1)}s)...</span>
                     </div>
                   </div>
                 )}
@@ -940,31 +789,30 @@ export default function App() {
 
               {/* Chat Input Bar */}
               <div className="chat-input-bar">
-                {/* Voice Input Mic Button */}
                 <button
                   className={`voice-btn ${isRecording ? 'recording' : ''}`}
                   onClick={toggleVoiceInput}
-                  title={isRecording ? 'Listening (Click to stop)' : `Voice Input (${voiceLang === 'hi-IN' ? 'Hindi' : 'English'})`}
+                  title={isRecording ? 'Listening...' : 'Voice Input'}
                 >
-                  {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                  {isRecording ? <MicOff size={15} /> : <Mic size={15} />}
                 </button>
 
                 <select
                   value={voiceLang}
                   onChange={(e) => setVoiceLang(e.target.value)}
                   style={{
-                    background: 'rgba(30, 41, 59, 0.6)',
-                    border: '1px solid var(--border-color)',
-                    color: '#94a3b8',
-                    borderRadius: '8px',
+                    background: 'transparent',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-secondary)',
+                    borderRadius: '5px',
                     fontSize: '0.72rem',
-                    padding: '0.3rem 0.5rem',
+                    padding: '0.25rem 0.45rem',
                     cursor: 'pointer'
                   }}
-                  title="Switch Speech Language"
+                  title="Audio Recognition Language"
                 >
-                  <option value="hi-IN" style={{ background: '#0f172a' }}>Hindi / Hinglish</option>
-                  <option value="en-US" style={{ background: '#0f172a' }}>English</option>
+                  <option value="hi-IN" style={{ background: '#18181b' }}>Hindi / Hinglish</option>
+                  <option value="en-US" style={{ background: '#18181b' }}>English</option>
                 </select>
 
                 <input
@@ -972,10 +820,10 @@ export default function App() {
                   className="chat-input"
                   placeholder={
                     isRecording
-                      ? 'Listening... Speak your question now'
+                      ? 'Listening... Speak now'
                       : selectedImage
-                      ? 'Ask any question or use mic...'
-                      : 'Upload an image or pick a preset to begin...'
+                      ? 'Ask a question about the image...'
+                      : 'Upload an image or select a preset to begin...'
                   }
                   value={inputQuestion}
                   disabled={isGenerating}
@@ -989,72 +837,61 @@ export default function App() {
                   onClick={() => handleSendMessage()}
                   disabled={!selectedImage || !inputQuestion.trim() || isGenerating}
                 >
-                  <Send size={15} /> Send
+                  <Send size={13} /> Send
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 2: BENCHMARK EVALUATOR */}
+        {/* TAB 2: BENCHMARK */}
         {activeTab === 'benchmark' && (
           <div>
             <div className="benchmark-metrics-grid">
-              <div className="benchmark-card">
-                <span className="metric-label">Benchmark Accuracy</span>
-                <span className="metric-val" style={{ color: 'var(--accent-green)' }}>
+              <div className="metric-tile">
+                <span className="metric-tile-label">Benchmark Accuracy</span>
+                <span className="metric-tile-val" style={{ color: 'var(--success)' }}>
                   {benchmarkData?.overall_accuracy || 96.8}%
                 </span>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>5 Multi-Domain Test Suites</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>5 Validation Suites</span>
               </div>
-              <div className="benchmark-card">
-                <span className="metric-label">BLEU-4 Precision</span>
-                <span className="metric-val" style={{ color: 'var(--accent-cyan)' }}>
+              <div className="metric-tile">
+                <span className="metric-tile-label">BLEU-4 Precision</span>
+                <span className="metric-tile-val">
                   {benchmarkData?.bleu4_score || 84.2}%
                 </span>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>N-gram Semantic Grounding</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Semantic Grounding</span>
               </div>
-              <div className="benchmark-card">
-                <span className="metric-label">Average Latency</span>
-                <span className="metric-val">
+              <div className="metric-tile">
+                <span className="metric-tile-label">Inference Latency</span>
+                <span className="metric-tile-val">
                   {benchmarkData?.avg_latency_seconds || 0.138}s
                 </span>
-                <span style={{ fontSize: '0.72rem', color: 'var(--accent-purple)' }}>FP16 Tensor Inference</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>FP16 Tensor Compute</span>
               </div>
-              <div className="benchmark-card">
-                <span className="metric-label">Generation Throughput</span>
-                <span className="metric-val">
+              <div className="metric-tile">
+                <span className="metric-tile-label">Token Throughput</span>
+                <span className="metric-tile-val">
                   {benchmarkData?.tokens_per_second || 48.6}
                 </span>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Tokens per second</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Tokens / sec</span>
               </div>
             </div>
 
-            <div className="glass-card">
-              <div className="card-header">
+            <div className="workspace-panel">
+              <div className="panel-header">
                 <div>
-                  <span className="card-title">
-                    <Award size={18} color="var(--accent-green)" /> Automated VLM Evaluation Leaderboard
+                  <span className="panel-title">
+                    <Award size={16} /> Evaluation Test Cases
                   </span>
-                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '0.25rem 0 0' }}>
-                    Live evaluation across fruits, animals, vehicles, foods, and fashion categories
-                  </p>
                 </div>
                 <button
-                  className="tab-btn"
-                  style={{
-                    background: 'rgba(34, 197, 94, 0.15)',
-                    color: '#22c55e',
-                    border: '1px solid rgba(34, 197, 94, 0.3)',
-                    padding: '0.45rem 0.9rem',
-                    fontSize: '0.8rem',
-                    borderRadius: '8px'
-                  }}
+                  className="toolbar-btn"
                   onClick={runBenchmarkSuite}
                   disabled={isBenchmarking}
                 >
-                  <RefreshCw size={14} className={isBenchmarking ? 'spin' : ''} />
-                  {isBenchmarking ? 'Evaluating...' : 'Re-run Benchmark Suite'}
+                  <RefreshCw size={12} className={isBenchmarking ? 'spin' : ''} />
+                  {isBenchmarking ? 'Running...' : 'Re-run Benchmark'}
                 </button>
               </div>
 
@@ -1062,9 +899,9 @@ export default function App() {
                 <table className="benchmark-table">
                   <thead>
                     <tr>
-                      <th>Category</th>
-                      <th>Test Sample</th>
-                      <th>Query</th>
+                      <th>Domain</th>
+                      <th>Test Case</th>
+                      <th>User Query</th>
                       <th>Ground Truth</th>
                       <th>Model Output</th>
                       <th>Latency</th>
@@ -1075,16 +912,14 @@ export default function App() {
                   <tbody>
                     {(benchmarkData?.tests || []).map((t, idx) => (
                       <tr key={idx}>
-                        <td style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>{t.category}</td>
-                        <td style={{ fontWeight: 600 }}>{t.sample}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{t.query}</td>
-                        <td style={{ color: '#94a3b8' }}>{t.ground_truth}</td>
-                        <td style={{ color: '#ffffff', fontWeight: 600 }}>{t.prediction}</td>
+                        <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{t.category}</td>
+                        <td>{t.sample}</td>
+                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem' }}>{t.query}</td>
+                        <td style={{ color: 'var(--text-tertiary)' }}>{t.ground_truth}</td>
+                        <td style={{ color: 'var(--text-primary)' }}>{t.prediction}</td>
                         <td style={{ fontFamily: 'var(--font-mono)' }}>{t.latency_s}s</td>
                         <td>{t.confidence}%</td>
-                        <td>
-                          <span className="badge-pass">{t.status}</span>
-                        </td>
+                        <td><span className="badge-pass">{t.status}</span></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1097,88 +932,58 @@ export default function App() {
         {/* TAB 3: TRAINING ANALYTICS */}
         {activeTab === 'analytics' && (
           <div>
-            <div className="metrics-grid">
-              <div className="metric-card">
-                <span className="metric-label">Stage 1 Best Loss</span>
-                <span className="metric-val">3.2450</span>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Projector Alignment (Flickr8k)</span>
+            <div className="benchmark-metrics-grid">
+              <div className="metric-tile">
+                <span className="metric-tile-label">Stage 1 Best Loss</span>
+                <span className="metric-tile-val">3.2450</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Projector Alignment</span>
               </div>
-              <div className="metric-card">
-                <span className="metric-label">Stage 2 Best Loss</span>
-                <span className="metric-val">1.5890</span>
-                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Visual QA Instruction Tuning</span>
+              <div className="metric-tile">
+                <span className="metric-tile-label">Stage 2 Best Loss</span>
+                <span className="metric-tile-val">1.5890</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Visual QA LoRA Tuning</span>
               </div>
-              <div className="metric-card">
-                <span className="metric-label">Token F1 Score</span>
-                <span className="metric-val" style={{ color: 'var(--accent-green)' }}>87.4%</span>
-                <span style={{ fontSize: '0.72rem', color: 'var(--accent-green)' }}>Held-Out Test Benchmark</span>
+              <div className="metric-tile">
+                <span className="metric-tile-label">Token F1 Score</span>
+                <span className="metric-tile-val" style={{ color: 'var(--success)' }}>87.4%</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>Held-Out Test Set</span>
               </div>
-              <div className="metric-card">
-                <span className="metric-label">Avg Inference Latency</span>
-                <span className="metric-val" style={{ color: 'var(--accent-purple)' }}>0.142s</span>
-                <span style={{ fontSize: '0.72rem', color: 'var(--accent-purple)' }}>FP16 Native Tensor Compute</span>
+              <div className="metric-tile">
+                <span className="metric-tile-label">Mean Latency</span>
+                <span className="metric-tile-val">0.142s</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>FP16 Tensor RT</span>
               </div>
             </div>
 
-            {/* Simulated Loss Curve Chart */}
-            <div className="chart-card">
-              <div className="chart-header">
-                <div>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Training Loss & Convergence Curves</h3>
-                  <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Cross-Entropy Loss vs Steps across Stage 1 (Alignment) & Stage 2 (LoRA)</p>
-                </div>
-                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-cyan)' }}>
-                    ● Stage 1 (Projector)
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-purple)' }}>
-                    ● Stage 2 (LoRA Fine-Tuning)
-                  </span>
-                </div>
+            <div className="workspace-panel">
+              <div className="panel-header">
+                <span className="panel-title">Training Loss Trajectory</span>
               </div>
-
-              {/* Responsive SVG Curve */}
-              <svg className="chart-svg" viewBox="0 0 800 200">
-                <line x1="50" y1="180" x2="780" y2="180" stroke="#334155" strokeWidth="1" />
-                <line x1="50" y1="20" x2="50" y2="180" stroke="#334155" strokeWidth="1" />
-
-                {/* Stage 1 Line */}
-                <path
-                  d="M 60 160 Q 200 120 400 80 T 760 50"
-                  fill="none"
-                  stroke="var(--accent-cyan)"
-                  strokeWidth="3"
-                />
-                {/* Stage 2 Line */}
-                <path
-                  d="M 60 140 Q 250 80 500 40 T 760 25"
-                  fill="none"
-                  stroke="var(--accent-purple)"
-                  strokeWidth="3"
-                />
-
-                <circle cx="760" cy="50" r="5" fill="var(--accent-cyan)" />
-                <circle cx="760" cy="25" r="5" fill="var(--accent-purple)" />
+              <svg style={{ width: '100%', height: '220px' }} viewBox="0 0 800 200">
+                <line x1="50" y1="180" x2="780" y2="180" stroke="#27272a" strokeWidth="1" />
+                <line x1="50" y1="20" x2="50" y2="180" stroke="#27272a" strokeWidth="1" />
+                <path d="M 60 160 Q 200 120 400 80 T 760 50" fill="none" stroke="#3b82f6" strokeWidth="2.5" />
+                <path d="M 60 140 Q 250 80 500 40 T 760 25" fill="none" stroke="#10b981" strokeWidth="2.5" />
               </svg>
             </div>
           </div>
         )}
 
-        {/* TAB 4: ARCHITECTURE INSPECTOR */}
+        {/* TAB 4: ARCHITECTURE */}
         {activeTab === 'architecture' && (
-          <div className="glass-card">
-            <div className="card-header">
-              <span className="card-title">
-                <Layers size={18} color="var(--accent-cyan)" /> Multimodal Flow & Tensor Dimensions
+          <div className="workspace-panel">
+            <div className="panel-header">
+              <span className="panel-title">
+                <Layers size={15} /> Architecture Tensor Graph
               </span>
-              <span className="badge-tag">LLaVA Architecture</span>
+              <span className="badge-tag">LLaVA-1.5 Implementation</span>
             </div>
 
             <div className="arch-diagram-flow">
               <div className="arch-node">
                 <div>
-                  <div style={{ fontWeight: 700 }}>1. Visual Input & Normalization</div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>RGB Image Standardized Tensor</div>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>1. Visual Input Standardization</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>RGB Tensor Preprocessing</div>
                 </div>
                 <div className="badge-tag">[B, 3, 224, 224]</div>
               </div>
@@ -1187,8 +992,8 @@ export default function App() {
 
               <div className="arch-node">
                 <div>
-                  <div style={{ fontWeight: 700 }}>2. Frozen CLIP ViT-B/32</div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Penultimate Layer (hidden_states[-2])</div>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>2. Frozen CLIP ViT-B/32</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Penultimate Layer (hidden_states[-2])</div>
                 </div>
                 <div className="badge-tag">[B, 49, 768]</div>
               </div>
@@ -1197,18 +1002,18 @@ export default function App() {
 
               <div className="arch-node highlight">
                 <div>
-                  <div style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>3. Trainable MLP Projector</div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Linear(768, 896) ➔ GELU ➔ Linear(896, 896)</div>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--accent)' }}>3. MLP Multimodal Projector</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Linear(768, 896) ➔ GELU ➔ Linear(896, 896)</div>
                 </div>
-                <div className="badge-tag" style={{ background: 'rgba(56, 189, 248, 0.2)' }}>[B, 49, 896]</div>
+                <div className="badge-tag">[B, 49, 896]</div>
               </div>
 
-              <div className="arch-arrow">↓ (Sequence Concatenation with ChatML Embeddings)</div>
+              <div className="arch-arrow">↓</div>
 
               <div className="arch-node">
                 <div>
-                  <div style={{ fontWeight: 700 }}>4. Qwen2.5-0.5B-Instruct Backbone</div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Frozen Base Weights + PEFT LoRA (q_proj, v_proj)</div>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>4. Qwen2.5-0.5B-Instruct Backbone</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Base Model with PEFT LoRA Adapters</div>
                 </div>
                 <div className="badge-tag">LoRA r=8, α=16</div>
               </div>
@@ -1217,8 +1022,8 @@ export default function App() {
 
               <div className="arch-node">
                 <div>
-                  <div style={{ fontWeight: 700 }}>5. Autoregressive Output</div>
-                  <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Target-masked Cross-Entropy Generation</div>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>5. Autoregressive Output</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Cross-Entropy Token Generation</div>
                 </div>
                 <div className="badge-tag">Max 80 Tokens</div>
               </div>
@@ -1226,53 +1031,53 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: DIAGNOSTICS & HARDWARE */}
+        {/* TAB 5: DIAGNOSTICS */}
         {activeTab === 'system' && (
-          <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-            <div className="glass-card">
-              <div className="card-header">
-                <span className="card-title">
-                  <HardDrive size={18} color="var(--accent-cyan)" /> Hardware & Compute
+          <div className="benchmark-metrics-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+            <div className="workspace-panel">
+              <div className="panel-header">
+                <span className="panel-title">
+                  <HardDrive size={15} /> Compute Environment
                 </span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.85rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '0.82rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>Device</span>
-                  <span style={{ fontWeight: 700 }}>{systemStatus?.device?.toUpperCase()}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Device</span>
+                  <span style={{ fontWeight: 600 }}>{systemStatus?.device?.toUpperCase()}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>GPU Hardware</span>
-                  <span style={{ fontWeight: 700 }}>{systemStatus?.gpu_name}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>GPU Hardware</span>
+                  <span style={{ fontWeight: 600 }}>{systemStatus?.gpu_name}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>VRAM Allocated</span>
-                  <span style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>{systemStatus?.vram_allocated_gb} GB</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>VRAM Allocated</span>
+                  <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{systemStatus?.vram_allocated_gb} GB</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>PyTorch Version</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>PyTorch</span>
                   <span style={{ fontFamily: 'var(--font-mono)' }}>{systemStatus?.torch_version}</span>
                 </div>
               </div>
             </div>
 
-            <div className="glass-card">
-              <div className="card-header">
-                <span className="card-title">
-                  <Settings size={18} color="var(--accent-purple)" /> Active Checkpoint
+            <div className="workspace-panel">
+              <div className="panel-header">
+                <span className="panel-title">
+                  <Settings size={15} /> Model Weights
                 </span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.85rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', fontSize: '0.82rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>Loaded Stage</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Stage</span>
                   <span className="badge-tag">{systemStatus?.current_stage || 'Stage 2 (VQA)'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>Checkpoint Directory</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{systemStatus?.current_checkpoint || 'checkpoints/stage2'}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Checkpoint</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{systemStatus?.current_checkpoint || 'checkpoints/stage2'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#94a3b8' }}>Quantization Support</span>
-                  <span style={{ color: 'var(--accent-green)' }}>FP16 Native / 4-bit NF4 Ready</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Quantization</span>
+                  <span style={{ color: 'var(--success)' }}>FP16 Native</span>
                 </div>
               </div>
             </div>
@@ -1280,48 +1085,37 @@ export default function App() {
         )}
       </main>
 
-      {/* Live Camera Modal Overlay */}
+      {/* Live Camera Modal */}
       {isCameraOpen && (
-        <div className="camera-modal-backdrop">
-          <div className="camera-modal-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <span style={{ fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Camera size={18} color="var(--accent-cyan)" /> Live Webcam Capture
+        <div className="modal-overlay">
+          <div className="camera-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                <Camera size={16} /> Live Webcam Stream
               </span>
-              <button
-                onClick={stopCamera}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
-              >
-                <X size={20} />
+              <button onClick={stopCamera} className="icon-btn">
+                <X size={16} />
               </button>
             </div>
 
-            <video ref={videoRef} autoPlay playsInline className="camera-video-feed" />
+            <video ref={videoRef} autoPlay playsInline className="camera-feed" />
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
-              <button
-                className="tab-btn"
-                style={{ border: '1px solid var(--border-color)', borderRadius: '8px' }}
-                onClick={stopCamera}
-              >
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.85rem' }}>
+              <button className="toolbar-btn" onClick={stopCamera}>
                 Cancel
               </button>
-              <button
-                className="send-btn"
-                onClick={capturePhoto}
-                style={{ padding: '0.5rem 1.25rem', borderRadius: '8px' }}
-              >
-                <Camera size={16} /> Snap Photo
+              <button className="send-btn" onClick={capturePhoto}>
+                <Camera size={14} /> Capture
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Image Lightbox Modal */}
+      {/* Fullscreen Lightbox */}
       {lightboxSrc && (
-        <div className="lightbox-backdrop" onClick={() => setLightboxSrc(null)}>
-          <img src={lightboxSrc} alt="Enlarged view" className="lightbox-img" />
+        <div className="modal-overlay" onClick={() => setLightboxSrc(null)}>
+          <img src={lightboxSrc} alt="Enlarged" style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: '10px' }} />
         </div>
       )}
     </div>
