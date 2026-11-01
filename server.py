@@ -43,6 +43,16 @@ MODEL_CACHE = {
 }
 
 
+@app.on_event("startup")
+def preload_model():
+    print("[INIT] Pre-warming Mini-VLM into GPU memory for instantaneous inference...")
+    try:
+        get_model()
+        print("[OK] Mini-VLM warm and ready to serve chat requests instantly!")
+    except Exception as e:
+        print(f"[WARN] Startup warm-up encountered: {e}")
+
+
 def get_model(checkpoint: str = "checkpoints/stage2", stage: str = "stage2"):
     global MODEL_CACHE
     if MODEL_CACHE["model"] is not None and MODEL_CACHE["checkpoint"] == checkpoint and MODEL_CACHE["stage"] == stage:
