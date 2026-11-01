@@ -345,7 +345,7 @@ class MiniVLM(nn.Module):
         return output.loss
 
     @torch.no_grad()
-    def answer(self, image, question, history=None, max_new_tokens=80, secondary_image=None):
+    def answer(self, image, question, history=None, max_new_tokens=80, secondary_image=None, return_meta=False):
         self.eval()
         pixels = self.processor(images=image.convert("RGB"), return_tensors="pt")["pixel_values"]
         visual_features = self.encode_image(pixels)
@@ -387,6 +387,8 @@ class MiniVLM(nn.Module):
         # Clean any accidental assistant prompt label bleed
         if "assistant\n" in ans:
             ans = ans.split("assistant\n")[-1].strip()
+        if return_meta:
+            return ans, visual_context
         return ans
 
     def save_projector(self, path):

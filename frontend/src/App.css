@@ -463,3 +463,177 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* Voice & Audio Controls */
+.voice-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.voice-btn:hover {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+
+.voice-btn.recording {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border-color: #ef4444;
+  animation: pulse-mic 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-mic {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+}
+
+.tts-speaker-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.7rem;
+  transition: all 0.2s;
+}
+
+.tts-speaker-btn:hover {
+  color: var(--accent-cyan);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.tts-speaker-btn.active {
+  color: var(--accent-green);
+  animation: pulse-speaker 1s infinite alternate;
+}
+
+@keyframes pulse-speaker {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+
+/* Visual Grounding & Tags */
+.grounding-panel {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.75rem;
+}
+
+.grounding-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  margin: 0.2rem;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+/* Camera Modal */
+.camera-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.camera-modal-card {
+  width: 90%;
+  max-width: 560px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.camera-video-feed {
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #000;
+  border: 1px solid var(--border-color);
+}
+
+/* Benchmark Suite UI */
+.benchmark-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 0.82rem;
+}
+
+.benchmark-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  background: rgba(30, 41, 59, 0.6);
+  color: #94a3b8;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+}
+
+.benchmark-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  color: #e2e8f0;
+}
+
+.benchmark-table tr:hover {
+  background: rgba(56, 189, 248, 0.04);
+}
+
+.badge-pass {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+/* Print / Export Report Mode */
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .top-nav, .tabs-nav, .chat-input-bar, .remove-img-btn, .quick-prompts-list, .voice-btn {
+    display: none !important;
+  }
+  .glass-card {
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .chat-bubble.bot {
+    background: #f1f5f9 !important;
+    color: #000 !important;
+  }
+}
