@@ -33,6 +33,31 @@
   --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
 }
 
+/* Studio Theme Variants */
+[data-theme="emerald"] {
+  --accent: #10b981;
+  --accent-hover: #059669;
+  --accent-subtle: rgba(16, 185, 129, 0.12);
+  --accent-border: rgba(16, 185, 129, 0.3);
+  --border-focus: #10b981;
+}
+
+[data-theme="amber"] {
+  --accent: #f59e0b;
+  --accent-hover: #d97706;
+  --accent-subtle: rgba(245, 158, 11, 0.12);
+  --accent-border: rgba(245, 158, 11, 0.3);
+  --border-focus: #f59e0b;
+}
+
+[data-theme="blue"] {
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-subtle: rgba(59, 130, 246, 0.12);
+  --accent-border: rgba(59, 130, 246, 0.3);
+  --border-focus: #3b82f6;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

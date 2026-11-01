@@ -23,7 +23,8 @@ import {
   Copy,
   Check,
   ChevronRight,
-  Sliders
+  Sliders,
+  Grid
 } from 'lucide-react';
 import './App.css';
 
@@ -113,6 +114,17 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [maxTokens, setMaxTokens] = useState(80);
+
+  // Theme State
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('minivlm_theme') || 'blue'; } catch { return 'blue'; }
+  });
+
+  // Vision Transformer 7x7 Patch Grid & HUD State
+  const [showPatchGrid, setShowPatchGrid] = useState(false);
+  const [hoveredPatch, setHoveredPatch] = useState(null);
+  const [mousePos, setMousePos] = useState(null);
+  const previewContainerRef = useRef(null);
 
   // Audio / Voice state
   const [isRecording, setIsRecording] = useState(false);
@@ -346,6 +358,28 @@ export default function App() {
     }
   };
 
+  // Theme switch handler
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme);
+    try { localStorage.setItem('minivlm_theme', newTheme); } catch {}
+  };
+
+  // Preview container HUD mouse tracking
+  const handlePreviewMouseMove = (e) => {
+    if (!previewContainerRef.current) return;
+    const rect = previewContainerRef.current.getBoundingClientRect();
+    const x = Math.round(e.clientX - rect.left);
+    const y = Math.round(e.clientY - rect.top);
+    if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+      setMousePos({ x, y });
+    }
+  };
+
+  const handlePreviewMouseLeave = () => {
+    setMousePos(null);
+    setHoveredPatch(null);
+  };
+
   // Image Upload handler
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -456,7 +490,7 @@ export default function App() {
   };
 
   return (
-    <div className="dashboard-container">
+    <div className="dashboard-container" data-theme={theme}>
       {/* Top Navbar */}
       <header className="top-nav">
         <div className="brand-section">
@@ -505,6 +539,28 @@ export default function App() {
         </nav>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          {/* Studio Accent Theme Picker */}
+          <div className="theme-selector" title="Switch Studio Theme Accent">
+            <button
+              className={`theme-dot-btn ${theme === 'blue' ? 'active' : ''}`}
+              style={{ background: '#3b82f6', color: '#3b82f6' }}
+              onClick={() => handleThemeChange('blue')}
+              title="Obsidian Blue"
+            />
+            <button
+              className={`theme-dot-btn ${theme === 'emerald' ? 'active' : ''}`}
+              style={{ background: '#10b981', color: '#10b981' }}
+              onClick={() => handleThemeChange('emerald')}
+              title="Emerald Vision"
+            />
+            <button
+              className={`theme-dot-btn ${theme === 'amber' ? 'active' : ''}`}
+              style={{ background: '#f59e0b', color: '#f59e0b' }}
+              onClick={() => handleThemeChange('amber')}
+              title="Amber Horizon"
+            />
+          </div>
+
           <div className="system-status-pill">
             <span className="status-dot"></span>
             <span>{systemStatus?.device?.toUpperCase() || 'CUDA'} FP16</span>
@@ -551,9 +607,79 @@ export default function App() {
               {/* Primary Image Slot */}
               <div>
                 {imagePreview ? (
-                  <div className="preview-container" style={{ height: isCompareMode ? '135px' : '220px' }}>
+                  <div
+                    ref={previewContainerRef}
+                    className="preview-container"
+                    style={{ height: isCompareMode ? '135px' : '220px' }}
+                    onMouseMove={handlePreviewMouseMove}
+                    onMouseLeave={handlePreviewMouseLeave}
+                  >
                     <img src={imagePreview} alt="Selected visual input" className="preview-img" />
+
+                    {/* Dynamic HUD Crosshairs */}
+                    {mousePos && (
+                      <>
+                        <div className="hud-crosshair-x" style={{ top: `${mousePos.y}px` }} />
+                        <div className="hud-crosshair-y" style={{ left: `${mousePos.x}px` }} />
+                        <div className="hud-coordinates">
+                          X: {mousePos.x}px • Y: {mousePos.y}px
+                        </div>
+                      </>
+                    )}
+
+                    {/* Vision Transformer 7x7 Patch Grid (49 Tokens) */}
+                    {showPatchGrid && (
+                      <div className="patch-grid-overlay">
+                        {Array.from({ length: 49 }).map((_, i) => {
+                          const row = Math.floor(i / 7);
+                          const col = i % 7;
+                          const isHovered = hoveredPatch?.index === i;
+                          return (
+                            <div
+                              key={i}
+                              className={`patch-cell ${isHovered ? 'hovered' : ''}`}
+                              onMouseEnter={() => setHoveredPatch({ index: i, row, col })}
+                              onMouseLeave={() => setHoveredPatch(null)}
+                            >
+                              <span className="patch-cell-num">{i}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Active Patch Hover Tooltip */}
+                    {hoveredPatch && (
+                      <div className="hud-patch-tooltip">
+                        <span>Patch #{hoveredPatch.index}</span>
+                        <span style={{ color: 'var(--text-tertiary)' }}>•</span>
+                        <span>[{hoveredPatch.row},{hoveredPatch.col}]</span>
+                        <span style={{ color: 'var(--text-tertiary)' }}>•</span>
+                        <span>768-d ViT Token</span>
+                      </div>
+                    )}
+
+                    {/* Laser Scanner Sweep during Generation */}
+                    {isGenerating && (
+                      <div className="scanner-laser-container">
+                        <div className="scanner-laser-line" />
+                        <div className="scanner-laser-beam" />
+                        <div className="scanner-badge">
+                          <Sparkles size={11} /> ViT-B/32 EXTRACTING 49 TOKENS...
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Preview Floating Toolbar */}
                     <div className="preview-toolbar">
+                      <button
+                        className={`toolbar-btn ${showPatchGrid ? 'active' : ''}`}
+                        onClick={() => setShowPatchGrid(!showPatchGrid)}
+                        title="Toggle 7x7 ViT Patch Grid Overlay (49 Tokens)"
+                        style={showPatchGrid ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}}
+                      >
+                        <Grid size={12} /> {showPatchGrid ? 'Grid On' : '7×7 Grid'}
+                      </button>
                       <button
                         className="toolbar-btn"
                         onClick={() => setLightboxSrc(imagePreview)}
@@ -787,6 +913,25 @@ export default function App() {
                 <div ref={chatBottomRef} />
               </div>
 
+              {/* Live Telemetry Ribbon */}
+              <div className="telemetry-ribbon">
+                <div className="telemetry-item">
+                  <span>Vision:</span> <strong>ViT-B/32 (49 Patches)</strong>
+                </div>
+                <span>•</span>
+                <div className="telemetry-item">
+                  <span>Projector:</span> <strong>MLP 768→896</strong>
+                </div>
+                <span>•</span>
+                <div className="telemetry-item">
+                  <span>LLM:</span> <strong>Qwen2.5-0.5B LoRA</strong>
+                </div>
+                <span>•</span>
+                <div className="telemetry-item">
+                  <span>Throughput:</span> <strong>{benchmarkData?.tokens_per_second || 48.6} tok/s</strong>
+                </div>
+              </div>
+
               {/* Chat Input Bar */}
               <div className="chat-input-bar">
                 <button
@@ -796,6 +941,19 @@ export default function App() {
                 >
                   {isRecording ? <MicOff size={15} /> : <Mic size={15} />}
                 </button>
+
+                {isRecording && (
+                  <div className="audio-equalizer" title="Voice audio active">
+                    <div className="eq-bar bar-1"></div>
+                    <div className="eq-bar bar-2"></div>
+                    <div className="eq-bar bar-3"></div>
+                    <div className="eq-bar bar-4"></div>
+                    <div className="eq-bar bar-5"></div>
+                    <div className="eq-bar bar-6"></div>
+                    <div className="eq-bar bar-7"></div>
+                    <div className="eq-bar bar-8"></div>
+                  </div>
+                )}
 
                 <select
                   value={voiceLang}

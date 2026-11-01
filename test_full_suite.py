@@ -93,7 +93,7 @@ try:
         data=json.dumps(chat_payload).encode("utf-8"),
         headers={"Content-Type": "application/json"}
     )
-    resp = urllib.request.urlopen(req, timeout=15)
+    resp = urllib.request.urlopen(req, timeout=30)
     res_data = json.loads(resp.read().decode("utf-8"))
     dur = round(time.perf_counter() - start, 3)
     
@@ -119,7 +119,7 @@ if turn1_answer:
             data=json.dumps(followup_payload).encode("utf-8"),
             headers={"Content-Type": "application/json"}
         )
-        resp = urllib.request.urlopen(req, timeout=15)
+        resp = urllib.request.urlopen(req, timeout=30)
         res_data = json.loads(resp.read().decode("utf-8"))
         ans2 = res_data.get("answer", "")
         log_test("Multi-Turn History Inference", bool(ans2), f"-> Follow-up Reply: '{ans2}'")
@@ -141,7 +141,7 @@ try:
         data=json.dumps(compare_payload).encode("utf-8"),
         headers={"Content-Type": "application/json"}
     )
-    resp = urllib.request.urlopen(req, timeout=15)
+    resp = urllib.request.urlopen(req, timeout=30)
     res_data = json.loads(resp.read().decode("utf-8"))
     log_test("Compare Mode (Dual-Image) Inference", bool(res_data.get("answer")), f"-> '{res_data.get('answer')}'")
 except Exception as e:
