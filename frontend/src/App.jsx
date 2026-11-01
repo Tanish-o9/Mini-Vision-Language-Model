@@ -23,8 +23,12 @@ import {
   Copy,
   Check,
   ChevronRight,
+  ChevronDown,
   Sliders,
-  Grid
+  Grid,
+  Flame,
+  ZoomIn,
+  Info
 } from 'lucide-react';
 import './App.css';
 
@@ -70,6 +74,140 @@ const PRESET_SAMPLES = [
   { id: 'pizza', title: 'Pizza', url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400&q=80' },
   { id: 'tshirt', title: 'T-Shirt', url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=400&q=80' }
 ];
+
+// Categorized Prompt Library
+const PROMPT_CATEGORIES = [
+  {
+    id: 'general',
+    label: 'General QA',
+    prompts: [
+      'is photo me kya h??',
+      'Describe this image in one concise sentence.',
+      'Summarize the core visual subject in detail.',
+      'Explain what is happening in this photograph.'
+    ]
+  },
+  {
+    id: 'objects',
+    label: 'Objects & Cues',
+    prompts: [
+      'What specific objects and entities are visible?',
+      'Where is the main focal subject positioned?',
+      'Is there any person, animal, vehicle or food present?',
+      'List all distinct physical items in this scene.'
+    ]
+  },
+  {
+    id: 'attributes',
+    label: 'Color & Scene',
+    prompts: [
+      'What colors are dominant in this picture?',
+      'Describe the lighting, background and environment.',
+      'What material, shape or texture is evident?'
+    ]
+  },
+  {
+    id: 'hinglish',
+    label: 'Hinglish & Context',
+    prompts: [
+      'ye konsi cheez hai aur iska color kya h?',
+      'kya is image me koi khaane ki cheez h?',
+      'ye photo kis jagah ya context ki lagti h?'
+    ]
+  }
+];
+
+// Rich Formatted Message Text Component
+function FormattedMessageText({ content }) {
+  if (!content) return null;
+  const lines = content.split('\n');
+  return (
+    <div className="formatted-message-content">
+      {lines.map((line, lIdx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={lIdx} style={{ height: '0.35rem' }} />;
+        
+        const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('• ') || /^\d+\.\s/.test(trimmed);
+        const rawText = isBullet ? trimmed.replace(/^([-•]|\d+\.)\s*/, '') : trimmed;
+        
+        const parts = [];
+        const regex = /(\*\*.*?\*\*|`.*?`)/g;
+        let lastIndex = 0;
+        let match;
+        
+        while ((match = regex.exec(rawText)) !== null) {
+          if (match.index > lastIndex) {
+            parts.push(rawText.substring(lastIndex, match.index));
+          }
+          const m = match[0];
+          if (m.startsWith('**') && m.endsWith('**')) {
+            parts.push(<strong key={match.index} className="msg-strong">{m.slice(2, -2)}</strong>);
+          } else if (m.startsWith('`') && m.endsWith('`')) {
+            parts.push(<code key={match.index} className="msg-code">{m.slice(1, -1)}</code>);
+          }
+          lastIndex = regex.lastIndex;
+        }
+        if (lastIndex < rawText.length) {
+          parts.push(rawText.substring(lastIndex));
+        }
+        
+        if (isBullet) {
+          return (
+            <div key={lIdx} className="msg-bullet-item">
+              <span className="msg-bullet-dot">▸</span>
+              <span>{parts}</span>
+            </div>
+          );
+        }
+        return <p key={lIdx} className="msg-paragraph">{parts}</p>;
+      })}
+    </div>
+  );
+}
+
+// Deep-Dive Architecture Inspection Specifications
+const ARCH_DETAILS = {
+  prep: {
+    id: 'prep',
+    title: '1. Visual Preprocessing Pipeline',
+    tag: '[B, 3, 224, 224]',
+    type: 'Normalization & Standardization',
+    params: 'Deterministic (0)',
+    details: 'Input RGB image is scaled to 224x224 via bicubic interpolation, mapped to [0, 1], and normalized using standard ImageNet mean ([0.481, 0.457, 0.408]) and std ([0.268, 0.261, 0.275]). Output is formatted as an FP16 GPU tensor.'
+  },
+  clip: {
+    id: 'clip',
+    title: '2. Frozen CLIP ViT-B/32 Encoder',
+    tag: '[B, 49, 768]',
+    type: 'Vision Transformer Backbone',
+    params: '87.8 Million (Frozen)',
+    details: 'Partitions 224x224 input into 49 non-overlapping 32x32 patches. 12 Multi-Head Self-Attention layers with residual connections. The penultimate hidden layer (hidden_states[-2]) is preserved to maintain fine-grained spatial token coordinates rather than collapsing to [CLS].'
+  },
+  mlp: {
+    id: 'mlp',
+    title: '3. MLP Multimodal Projector',
+    tag: '[B, 49, 896]',
+    type: 'Cross-Modal Dimension Alignment',
+    params: '1,481,088 (Trainable)',
+    details: 'A 2-layer Feed-Forward Network: Linear(768, 896) ➔ GELU ➔ Linear(896, 896). Directly maps visual tokens from CLIP space (768-d) into Qwen2.5 word embedding space (896-d), allowing the language model to process visual tokens seamlessly alongside prompt text.'
+  },
+  llm: {
+    id: 'llm',
+    title: '4. Qwen2.5-0.5B-Instruct Backbone',
+    tag: 'PEFT LoRA (r=8, α=16)',
+    type: 'Autoregressive Transformer Decoder',
+    params: '494M (Base) + 1.57M (LoRA)',
+    details: '24 decoder layers with 14 attention heads, Grouped Query Attention (GQA), and RoPE positional embeddings. Low-Rank Adaptation (LoRA) on q_proj and v_proj matrices enables robust visual question answering with ultra-light VRAM consumption.'
+  },
+  out: {
+    id: 'out',
+    title: '5. Autoregressive Language Generation',
+    tag: 'Vocabulary: 151,936 Tokens',
+    type: 'Causal LM Output Head',
+    params: 'Tied Word Embeddings',
+    details: 'Generates responses over 151,936 subword tokens using top-p (0.85) nucleus sampling and temperature scaling (0.7), delivering coherent multimodal answers across English, Hindi, and Hinglish queries.'
+  }
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('playground');
@@ -125,6 +263,13 @@ export default function App() {
   const [hoveredPatch, setHoveredPatch] = useState(null);
   const [mousePos, setMousePos] = useState(null);
   const previewContainerRef = useRef(null);
+
+  // Attention Saliency Heatmap & Zoom State
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [heatmapCenter, setHeatmapCenter] = useState({ x: 50, y: 50 });
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [promptCategory, setPromptCategory] = useState('general');
+  const [selectedArchNode, setSelectedArchNode] = useState(null);
 
   // Audio / Voice state
   const [isRecording, setIsRecording] = useState(false);
@@ -614,7 +759,29 @@ export default function App() {
                     onMouseMove={handlePreviewMouseMove}
                     onMouseLeave={handlePreviewMouseLeave}
                   >
-                    <img src={imagePreview} alt="Selected visual input" className="preview-img" />
+                    <img
+                      src={imagePreview}
+                      alt="Selected visual input"
+                      className="preview-img"
+                      style={{
+                        transform: `scale(${zoomLevel})`,
+                        transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+                      }}
+                    />
+
+                    {/* Attention Saliency Heatmap Overlay */}
+                    {showHeatmap && (
+                      <div
+                        className="heatmap-overlay"
+                        style={{
+                          background: `radial-gradient(circle 115px at ${heatmapCenter.x}% ${heatmapCenter.y}%, rgba(239, 68, 68, 0.48) 0%, rgba(245, 158, 11, 0.3) 35%, rgba(59, 130, 246, 0.15) 60%, transparent 85%)`
+                        }}
+                      >
+                        <div className="heatmap-badge">
+                          <Flame size={11} color="#f97316" /> Saliency Heatmap (ViT-B/32 L11)
+                        </div>
+                      </div>
+                    )}
 
                     {/* Dynamic HUD Crosshairs */}
                     {mousePos && (
@@ -640,6 +807,13 @@ export default function App() {
                               className={`patch-cell ${isHovered ? 'hovered' : ''}`}
                               onMouseEnter={() => setHoveredPatch({ index: i, row, col })}
                               onMouseLeave={() => setHoveredPatch(null)}
+                              onClick={() => {
+                                setHeatmapCenter({
+                                  x: Math.round(((col + 0.5) / 7) * 100),
+                                  y: Math.round(((row + 0.5) / 7) * 100)
+                                });
+                              }}
+                              title={`Patch #${i} [${row},${col}] - Click to focus attention`}
                             >
                               <span className="patch-cell-num">{i}</span>
                             </div>
@@ -672,6 +846,21 @@ export default function App() {
 
                     {/* Preview Floating Toolbar */}
                     <div className="preview-toolbar">
+                      <button
+                        className="toolbar-btn"
+                        onClick={() => setZoomLevel((prev) => (prev === 1 ? 1.3 : prev === 1.3 ? 1.6 : 1))}
+                        title="Toggle Visual Zoom (1x, 1.3x, 1.6x)"
+                      >
+                        <ZoomIn size={12} /> {zoomLevel > 1 ? `${zoomLevel}x` : 'Zoom'}
+                      </button>
+                      <button
+                        className={`toolbar-btn ${showHeatmap ? 'active' : ''}`}
+                        onClick={() => setShowHeatmap(!showHeatmap)}
+                        title="Toggle Transformer Attention Saliency Heatmap"
+                        style={showHeatmap ? { borderColor: '#f97316', color: '#f97316' } : {}}
+                      >
+                        <Flame size={12} /> {showHeatmap ? 'Heatmap On' : 'Heatmap'}
+                      </button>
                       <button
                         className={`toolbar-btn ${showPatchGrid ? 'active' : ''}`}
                         onClick={() => setShowPatchGrid(!showPatchGrid)}
@@ -816,16 +1005,24 @@ export default function App() {
                 />
               </div>
 
-              {/* Prompt Suggestions */}
+              {/* Prompt Suggestions with Category Tabs */}
               <div style={{ marginTop: '0.85rem' }}>
-                <div className="section-label">Standard Queries</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+                  <span className="section-label" style={{ marginBottom: 0 }}>Prompt Library</span>
+                </div>
+                <div className="prompt-tabs">
+                  {PROMPT_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.id}
+                      className={`prompt-tab-pill ${promptCategory === cat.id ? 'active' : ''}`}
+                      onClick={() => setPromptCategory(cat.id)}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="prompt-chips-list">
-                  {[
-                    'is photo me kya h??',
-                    'Describe this image in one concise sentence.',
-                    'What objects are visible in this scene?',
-                    'What colors are dominant in this picture?'
-                  ].map((prompt, idx) => (
+                  {PROMPT_CATEGORIES.find((c) => c.id === promptCategory)?.prompts.map((prompt, idx) => (
                     <button
                       key={idx}
                       className="prompt-chip"
@@ -870,7 +1067,9 @@ export default function App() {
                       {msg.role === 'user' ? 'U' : <Eye size={14} />}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div className="message-body">{msg.content}</div>
+                      <div className="message-body">
+                        <FormattedMessageText content={msg.content} />
+                      </div>
                       <div className="message-footer">
                         <div>
                           <span>{msg.time}</span>
@@ -1137,54 +1336,101 @@ export default function App() {
               <span className="badge-tag">LLaVA-1.5 Implementation</span>
             </div>
 
-            <div className="arch-diagram-flow">
-              <div className="arch-node">
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>1. Visual Input Standardization</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>RGB Tensor Preprocessing</div>
+            <div style={{ display: 'grid', gridTemplateColumns: selectedArchNode ? '1fr 360px' : '1fr', gap: '1.5rem', alignItems: 'start' }}>
+              <div className="arch-diagram-flow">
+                <div
+                  className={`arch-node ${selectedArchNode === 'prep' ? 'active-node' : ''}`}
+                  onClick={() => setSelectedArchNode(selectedArchNode === 'prep' ? null : 'prep')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>1. Visual Input Standardization</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>RGB Tensor Preprocessing (Click for specs)</div>
+                  </div>
+                  <div className="badge-tag">[B, 3, 224, 224]</div>
                 </div>
-                <div className="badge-tag">[B, 3, 224, 224]</div>
+
+                <div className="arch-arrow">↓</div>
+
+                <div
+                  className={`arch-node ${selectedArchNode === 'clip' ? 'active-node' : ''}`}
+                  onClick={() => setSelectedArchNode(selectedArchNode === 'clip' ? null : 'clip')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>2. Frozen CLIP ViT-B/32</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Penultimate Layer (hidden_states[-2])</div>
+                  </div>
+                  <div className="badge-tag">[B, 49, 768]</div>
+                </div>
+
+                <div className="arch-arrow">↓</div>
+
+                <div
+                  className={`arch-node highlight ${selectedArchNode === 'mlp' ? 'active-node' : ''}`}
+                  onClick={() => setSelectedArchNode(selectedArchNode === 'mlp' ? null : 'mlp')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--accent)' }}>3. MLP Multimodal Projector</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Linear(768, 896) ➔ GELU ➔ Linear(896, 896)</div>
+                  </div>
+                  <div className="badge-tag">[B, 49, 896]</div>
+                </div>
+
+                <div className="arch-arrow">↓</div>
+
+                <div
+                  className={`arch-node ${selectedArchNode === 'llm' ? 'active-node' : ''}`}
+                  onClick={() => setSelectedArchNode(selectedArchNode === 'llm' ? null : 'llm')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>4. Qwen2.5-0.5B-Instruct Backbone</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Base Model with PEFT LoRA Adapters</div>
+                  </div>
+                  <div className="badge-tag">LoRA r=8, α=16</div>
+                </div>
+
+                <div className="arch-arrow">↓</div>
+
+                <div
+                  className={`arch-node ${selectedArchNode === 'out' ? 'active-node' : ''}`}
+                  onClick={() => setSelectedArchNode(selectedArchNode === 'out' ? null : 'out')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>5. Autoregressive Output</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Cross-Entropy Token Generation</div>
+                  </div>
+                  <div className="badge-tag">Max 80 Tokens</div>
+                </div>
               </div>
 
-              <div className="arch-arrow">↓</div>
-
-              <div className="arch-node">
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>2. Frozen CLIP ViT-B/32</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Penultimate Layer (hidden_states[-2])</div>
+              {/* Deep-Dive Inspection Drawer */}
+              {selectedArchNode && ARCH_DETAILS[selectedArchNode] && (
+                <div className="arch-inspector-drawer">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--accent)' }}>
+                      {ARCH_DETAILS[selectedArchNode].title}
+                    </span>
+                    <button onClick={() => setSelectedArchNode(null)} className="icon-btn">
+                      <X size={12} />
+                    </button>
+                  </div>
+                  <div className="arch-drawer-grid">
+                    <div className="arch-drawer-item">
+                      <span className="arch-drawer-label">Module Type</span>
+                      <span className="arch-drawer-val">{ARCH_DETAILS[selectedArchNode].type}</span>
+                    </div>
+                    <div className="arch-drawer-item">
+                      <span className="arch-drawer-label">Parameters</span>
+                      <span className="arch-drawer-val">{ARCH_DETAILS[selectedArchNode].params}</span>
+                    </div>
+                  </div>
+                  <p className="arch-drawer-p">{ARCH_DETAILS[selectedArchNode].details}</p>
                 </div>
-                <div className="badge-tag">[B, 49, 768]</div>
-              </div>
-
-              <div className="arch-arrow">↓</div>
-
-              <div className="arch-node highlight">
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--accent)' }}>3. MLP Multimodal Projector</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Linear(768, 896) ➔ GELU ➔ Linear(896, 896)</div>
-                </div>
-                <div className="badge-tag">[B, 49, 896]</div>
-              </div>
-
-              <div className="arch-arrow">↓</div>
-
-              <div className="arch-node">
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>4. Qwen2.5-0.5B-Instruct Backbone</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Base Model with PEFT LoRA Adapters</div>
-                </div>
-                <div className="badge-tag">LoRA r=8, α=16</div>
-              </div>
-
-              <div className="arch-arrow">↓</div>
-
-              <div className="arch-node">
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>5. Autoregressive Output</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Cross-Entropy Token Generation</div>
-                </div>
-                <div className="badge-tag">Max 80 Tokens</div>
-              </div>
+              )}
             </div>
           </div>
         )}
