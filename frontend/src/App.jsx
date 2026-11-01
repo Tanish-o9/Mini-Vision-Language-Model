@@ -23,7 +23,10 @@ import {
   Camera,
   Download,
   Award,
-  X
+  X,
+  Copy,
+  Check,
+  Image as ImageIcon
 } from 'lucide-react';
 import './App.css';
 
@@ -95,7 +98,7 @@ export default function App() {
     return [
       {
         role: 'bot',
-        content: 'Hello! I am your Mini Vision-Language Assistant. Upload an image (or take a photo) and ask me questions in English or Hindi!',
+        content: 'Hello! I am your Mini Vision-Language Assistant. Upload an image, use the live camera, or choose a preset below to begin our visual dialogue!',
         time: 'Just now'
       }
     ];
@@ -107,14 +110,18 @@ export default function App() {
 
   // Voice & Audio State
   const [isRecording, setIsRecording] = useState(false);
-  const [voiceLang, setVoiceLang] = useState('hi-IN'); // default to Hindi/Hinglish
+  const [voiceLang, setVoiceLang] = useState('hi-IN');
   const [speakingIndex, setSpeakingIndex] = useState(null);
+  const [copiedIndex, setCopiedIndex] = useState(null);
   const recognitionRef = useRef(null);
 
   // Camera State
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const videoRef = useRef(null);
   const cameraStreamRef = useRef(null);
+
+  // Lightbox Modal
+  const [lightboxSrc, setLightboxSrc] = useState(null);
 
   // Benchmark State
   const [benchmarkData, setBenchmarkData] = useState(null);
@@ -288,6 +295,13 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
+  // Copy Message Helper
+  const copyMessageText = (text, index) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 1800);
+  };
+
   // Camera Handlers
   const startCamera = async () => {
     setIsCameraOpen(true);
@@ -326,6 +340,116 @@ export default function App() {
     setSelectedImage(dataUrl);
     setLatestVisualCues('');
     stopCamera();
+  };
+
+  // Interactive Preset Image Generator
+  const loadPresetSample = (type) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 400;
+    canvas.height = 400;
+    const ctx = canvas.getContext('2d');
+
+    if (type === 'apple') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 400, 400);
+      // Apple shape
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.arc(175, 220, 85, 0, Math.PI * 2);
+      ctx.arc(225, 220, 85, 0, Math.PI * 2);
+      ctx.fill();
+      // Stem & Leaf
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(195, 110, 10, 45);
+      ctx.beginPath();
+      ctx.ellipse(225, 125, 25, 12, Math.PI / 4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === 'car') {
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, 0, 400, 400);
+      // Blue sports car body
+      ctx.fillStyle = '#2563eb';
+      ctx.beginPath();
+      ctx.roundRect(80, 200, 240, 70, [15, 45, 10, 10]);
+      ctx.fill();
+      ctx.fillStyle = '#60a5fa';
+      ctx.beginPath();
+      ctx.roundRect(140, 155, 130, 50, [25, 25, 0, 0]);
+      ctx.fill();
+      // Wheels
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(130, 275, 26, 0, Math.PI * 2);
+      ctx.arc(270, 275, 26, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === 'pizza') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 400, 400);
+      // Crust
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.arc(200, 200, 120, 0, Math.PI * 2);
+      ctx.fill();
+      // Cheese
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(200, 200, 100, 0, Math.PI * 2);
+      ctx.fill();
+      // Pepperoni slices
+      ctx.fillStyle = '#b91c1c';
+      [[160, 160], [240, 160], [200, 210], [165, 245], [235, 245]].forEach(([x, y]) => {
+        ctx.beginPath();
+        ctx.arc(x, y, 16, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    } else if (type === 'tshirt') {
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(0, 0, 400, 400);
+      // Blue T-Shirt
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.moveTo(130, 120);
+      ctx.lineTo(80, 170);
+      ctx.lineTo(110, 205);
+      ctx.lineTo(140, 180);
+      ctx.lineTo(140, 310);
+      ctx.lineTo(260, 310);
+      ctx.lineTo(260, 180);
+      ctx.lineTo(290, 205);
+      ctx.lineTo(320, 170);
+      ctx.lineTo(270, 120);
+      ctx.closePath();
+      ctx.fill();
+    } else if (type === 'dog') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 400, 400);
+      // Puppy Head
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(200, 210, 80, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // Ears
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.ellipse(135, 170, 30, 45, -Math.PI / 6, 0, Math.PI * 2);
+      ctx.ellipse(265, 170, 30, 45, Math.PI / 6, 0, Math.PI * 2);
+      ctx.fill();
+      // Eyes & Nose
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(175, 195, 8, 0, Math.PI * 2);
+      ctx.arc(225, 195, 8, 0, Math.PI * 2);
+      ctx.arc(200, 225, 12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    setImagePreview(dataUrl);
+    setSelectedImage(dataUrl);
+    setLatestVisualCues('');
   };
 
   // Image Upload handler
@@ -373,7 +497,7 @@ export default function App() {
     const q = customPrompt || inputQuestion;
     if (!q.trim()) return;
     if (!selectedImage) {
-      alert('Please upload an image first!');
+      alert('Please upload or select an image first!');
       return;
     }
 
@@ -504,7 +628,7 @@ export default function App() {
           </div>
           <button
             className="tab-btn"
-            style={{ padding: '0.4rem', border: '1px solid var(--border-color)' }}
+            style={{ padding: '0.45rem', border: '1px solid var(--border-color)', borderRadius: '9px' }}
             onClick={fetchSystemStatus}
             title="Refresh System Status"
           >
@@ -529,13 +653,13 @@ export default function App() {
                     className="tab-btn"
                     style={{
                       fontSize: '0.72rem',
-                      padding: '0.2rem 0.5rem',
+                      padding: '0.25rem 0.55rem',
                       background: 'rgba(56, 189, 248, 0.1)',
                       color: 'var(--accent-cyan)',
                       border: '1px solid rgba(56, 189, 248, 0.25)'
                     }}
                     onClick={startCamera}
-                    title="Capture live photo from webcam"
+                    title="Capture photo from live webcam"
                   >
                     <Camera size={13} /> Camera
                   </button>
@@ -543,7 +667,7 @@ export default function App() {
                     className="tab-btn"
                     style={{
                       fontSize: '0.72rem',
-                      padding: '0.2rem 0.5rem',
+                      padding: '0.25rem 0.55rem',
                       background: isCompareMode ? 'rgba(129, 140, 248, 0.2)' : 'rgba(51, 65, 85, 0.4)',
                       color: isCompareMode ? 'var(--accent-purple)' : 'var(--text-muted)',
                       border: '1px solid var(--border-color)',
@@ -558,24 +682,34 @@ export default function App() {
               {/* Primary Image Slot */}
               <div style={{ marginBottom: isCompareMode ? '0.75rem' : '0' }}>
                 {imagePreview ? (
-                  <div className="preview-container" style={{ height: isCompareMode ? '135px' : '250px' }}>
+                  <div className="preview-container" style={{ height: isCompareMode ? '135px' : '230px' }}>
                     <img src={imagePreview} alt="Primary" className="preview-img" />
-                    <button
-                      className="remove-img-btn"
-                      onClick={() => {
-                        setImagePreview(null);
-                        setSelectedImage(null);
-                        setLatestVisualCues('');
-                      }}
-                    >
-                      <Trash2 size={13} /> Clear
-                    </button>
+                    <div className="preview-actions-bar">
+                      <button
+                        className="preview-action-btn"
+                        onClick={() => setLightboxSrc(imagePreview)}
+                        title="Enlarge preview"
+                      >
+                        <Maximize2 size={12} />
+                      </button>
+                      <button
+                        className="preview-action-btn danger"
+                        onClick={() => {
+                          setImagePreview(null);
+                          setSelectedImage(null);
+                          setLatestVisualCues('');
+                        }}
+                        title="Remove image"
+                      >
+                        <Trash2 size={12} /> Clear
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <div className="upload-dropzone" style={{ height: isCompareMode ? '135px' : '250px' }} onClick={() => fileInputRef.current?.click()}>
-                    <Upload size={24} color="#64748b" />
-                    <div style={{ fontWeight: 600, fontSize: '0.8rem' }}>Upload or Drop Image</div>
-                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>PNG, JPG, WebP supported</div>
+                  <div className="upload-dropzone" style={{ height: isCompareMode ? '135px' : '230px' }} onClick={() => fileInputRef.current?.click()}>
+                    <Upload size={28} color="var(--accent-cyan)" />
+                    <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>Upload or Drop Image</div>
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>PNG, JPG, WebP supported</div>
                   </div>
                 )}
                 <input
@@ -587,10 +721,24 @@ export default function App() {
                 />
               </div>
 
+              {/* Instant 1-Click Preset Samples */}
+              <div style={{ marginTop: '0.65rem' }}>
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <ImageIcon size={12} /> Instant Presets:
+                </div>
+                <div className="preset-strip">
+                  <button className="preset-chip" onClick={() => loadPresetSample('apple')}>🍎 Apple</button>
+                  <button className="preset-chip" onClick={() => loadPresetSample('car')}>🚗 Sports Car</button>
+                  <button className="preset-chip" onClick={() => loadPresetSample('pizza')}>🍕 Pizza</button>
+                  <button className="preset-chip" onClick={() => loadPresetSample('tshirt')}>👕 T-Shirt</button>
+                  <button className="preset-chip" onClick={() => loadPresetSample('dog')}>🐶 Puppy</button>
+                </div>
+              </div>
+
               {/* Visual Grounding & Real-time Cues */}
               {latestVisualCues && (
                 <div className="grounding-panel">
-                  <div style={{ fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--accent-cyan)', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <Eye size={13} /> Visual Grounding & Semantics:
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap' }}>
@@ -609,19 +757,21 @@ export default function App() {
                   {secondaryPreview ? (
                     <div className="preview-container" style={{ height: '135px' }}>
                       <img src={secondaryPreview} alt="Secondary" className="preview-img" />
-                      <button
-                        className="remove-img-btn"
-                        onClick={() => {
-                          setSecondaryPreview(null);
-                          setSecondaryImage(null);
-                        }}
-                      >
-                        <Trash2 size={13} /> Clear
-                      </button>
+                      <div className="preview-actions-bar">
+                        <button
+                          className="preview-action-btn danger"
+                          onClick={() => {
+                            setSecondaryPreview(null);
+                            setSecondaryImage(null);
+                          }}
+                        >
+                          <Trash2 size={12} /> Clear
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="upload-dropzone" style={{ height: '135px' }} onClick={() => secondFileInputRef.current?.click()}>
-                      <Upload size={24} color="#818cf8" />
+                      <Upload size={22} color="#818cf8" />
                       <div style={{ fontWeight: 600, fontSize: '0.8rem', color: '#818cf8' }}>Upload Comparison Image (Image 2)</div>
                     </div>
                   )}
@@ -652,8 +802,8 @@ export default function App() {
               )}
 
               {/* Generation Controls */}
-              <div style={{ marginTop: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.4rem' }}>
+              <div style={{ marginTop: '0.9rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '0.35rem' }}>
                   <span style={{ color: '#94a3b8' }}>Max Response Tokens</span>
                   <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{maxTokens}</span>
                 </div>
@@ -669,7 +819,9 @@ export default function App() {
               </div>
 
               {/* Quick Prompts */}
-              <div className="quick-prompts-title">💡 Instant Prompts</div>
+              <div className="quick-prompts-title">
+                <Sparkles size={13} color="var(--accent-cyan)" /> Instant Prompts
+              </div>
               <div className="quick-prompts-list">
                 {[
                   'is photo me kya h??',
@@ -682,7 +834,7 @@ export default function App() {
                     className="quick-prompt-chip"
                     onClick={() => handleSendMessage(prompt)}
                   >
-                    {prompt}
+                    <span>💬</span> {prompt}
                   </button>
                 ))}
               </div>
@@ -698,18 +850,19 @@ export default function App() {
                   <button
                     onClick={handleExportReport}
                     style={{
-                      background: 'transparent',
-                      border: '1px solid var(--border-color)',
-                      color: '#94a3b8',
-                      padding: '0.3rem 0.6rem',
-                      borderRadius: '6px',
+                      background: 'rgba(56, 189, 248, 0.08)',
+                      border: '1px solid rgba(56, 189, 248, 0.25)',
+                      color: 'var(--accent-cyan)',
+                      padding: '0.35rem 0.65rem',
+                      borderRadius: '8px',
                       fontSize: '0.75rem',
+                      fontWeight: 600,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.3rem'
+                      gap: '0.35rem'
                     }}
-                    title="Export chat report to PDF"
+                    title="Export visual inspection report to PDF"
                   >
                     <Download size={13} /> Export PDF
                   </button>
@@ -719,8 +872,8 @@ export default function App() {
                       background: 'transparent',
                       border: '1px solid var(--border-color)',
                       color: '#94a3b8',
-                      padding: '0.3rem 0.6rem',
-                      borderRadius: '6px',
+                      padding: '0.35rem 0.65rem',
+                      borderRadius: '8px',
                       fontSize: '0.75rem',
                       cursor: 'pointer'
                     }}
@@ -739,7 +892,7 @@ export default function App() {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div className="bubble-content">{msg.content}</div>
-                      <div className="chat-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div className="chat-meta">
                         <div>
                           <span>{msg.time}</span>
                           {msg.latency && (
@@ -747,16 +900,26 @@ export default function App() {
                           )}
                           {msg.device && <span> • {msg.device.toUpperCase()}</span>}
                         </div>
-                        {msg.role === 'bot' && (
+                        <div className="meta-actions">
                           <button
-                            className={`tts-speaker-btn ${speakingIndex === index ? 'active' : ''}`}
-                            onClick={() => toggleSpeech(msg.content, index)}
-                            title={speakingIndex === index ? 'Stop audio' : 'Listen to answer'}
+                            className="micro-btn"
+                            onClick={() => copyMessageText(msg.content, index)}
+                            title="Copy message"
                           >
-                            {speakingIndex === index ? <VolumeX size={13} /> : <Volume2 size={13} />}
-                            {speakingIndex === index ? 'Speaking...' : 'Listen'}
+                            {copiedIndex === index ? <Check size={12} color="var(--accent-green)" /> : <Copy size={12} />}
+                            {copiedIndex === index ? 'Copied' : 'Copy'}
                           </button>
-                        )}
+                          {msg.role === 'bot' && (
+                            <button
+                              className={`micro-btn ${speakingIndex === index ? 'active' : ''}`}
+                              onClick={() => toggleSpeech(msg.content, index)}
+                              title={speakingIndex === index ? 'Stop audio' : 'Listen to answer'}
+                            >
+                              {speakingIndex === index ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                              {speakingIndex === index ? 'Speaking...' : 'Listen'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -790,18 +953,18 @@ export default function App() {
                   value={voiceLang}
                   onChange={(e) => setVoiceLang(e.target.value)}
                   style={{
-                    background: 'transparent',
+                    background: 'rgba(30, 41, 59, 0.6)',
                     border: '1px solid var(--border-color)',
                     color: '#94a3b8',
-                    borderRadius: '6px',
+                    borderRadius: '8px',
                     fontSize: '0.72rem',
-                    padding: '0.2rem 0.4rem',
+                    padding: '0.3rem 0.5rem',
                     cursor: 'pointer'
                   }}
                   title="Switch Speech Language"
                 >
-                  <option value="hi-IN" style={{ background: '#1e293b' }}>Hindi / Hinglish</option>
-                  <option value="en-US" style={{ background: '#1e293b' }}>English</option>
+                  <option value="hi-IN" style={{ background: '#0f172a' }}>Hindi / Hinglish</option>
+                  <option value="en-US" style={{ background: '#0f172a' }}>English</option>
                 </select>
 
                 <input
@@ -812,7 +975,7 @@ export default function App() {
                       ? 'Listening... Speak your question now'
                       : selectedImage
                       ? 'Ask any question or use mic...'
-                      : 'Upload or capture an image to begin...'
+                      : 'Upload an image or pick a preset to begin...'
                   }
                   value={inputQuestion}
                   disabled={isGenerating}
@@ -836,29 +999,29 @@ export default function App() {
         {/* TAB 2: BENCHMARK EVALUATOR */}
         {activeTab === 'benchmark' && (
           <div>
-            <div className="metrics-grid">
-              <div className="metric-card">
+            <div className="benchmark-metrics-grid">
+              <div className="benchmark-card">
                 <span className="metric-label">Benchmark Accuracy</span>
                 <span className="metric-val" style={{ color: 'var(--accent-green)' }}>
                   {benchmarkData?.overall_accuracy || 96.8}%
                 </span>
                 <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>5 Multi-Domain Test Suites</span>
               </div>
-              <div className="metric-card">
+              <div className="benchmark-card">
                 <span className="metric-label">BLEU-4 Precision</span>
                 <span className="metric-val" style={{ color: 'var(--accent-cyan)' }}>
                   {benchmarkData?.bleu4_score || 84.2}%
                 </span>
                 <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>N-gram Semantic Grounding</span>
               </div>
-              <div className="metric-card">
+              <div className="benchmark-card">
                 <span className="metric-label">Average Latency</span>
                 <span className="metric-val">
                   {benchmarkData?.avg_latency_seconds || 0.138}s
                 </span>
                 <span style={{ fontSize: '0.72rem', color: 'var(--accent-purple)' }}>FP16 Tensor Inference</span>
               </div>
-              <div className="metric-card">
+              <div className="benchmark-card">
                 <span className="metric-label">Generation Throughput</span>
                 <span className="metric-val">
                   {benchmarkData?.tokens_per_second || 48.6}
@@ -867,7 +1030,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="glass-card" style={{ marginTop: '1.5rem' }}>
+            <div className="glass-card">
               <div className="card-header">
                 <div>
                   <span className="card-title">
@@ -883,8 +1046,9 @@ export default function App() {
                     background: 'rgba(34, 197, 94, 0.15)',
                     color: '#22c55e',
                     border: '1px solid rgba(34, 197, 94, 0.3)',
-                    padding: '0.4rem 0.8rem',
-                    fontSize: '0.8rem'
+                    padding: '0.45rem 0.9rem',
+                    fontSize: '0.8rem',
+                    borderRadius: '8px'
                   }}
                   onClick={runBenchmarkSuite}
                   disabled={isBenchmarking}
@@ -911,11 +1075,11 @@ export default function App() {
                   <tbody>
                     {(benchmarkData?.tests || []).map((t, idx) => (
                       <tr key={idx}>
-                        <td style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>{t.category}</td>
-                        <td>{t.sample}</td>
+                        <td style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>{t.category}</td>
+                        <td style={{ fontWeight: 600 }}>{t.sample}</td>
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{t.query}</td>
                         <td style={{ color: '#94a3b8' }}>{t.ground_truth}</td>
-                        <td style={{ color: '#e2e8f0', fontWeight: 500 }}>{t.prediction}</td>
+                        <td style={{ color: '#ffffff', fontWeight: 600 }}>{t.prediction}</td>
                         <td style={{ fontFamily: 'var(--font-mono)' }}>{t.latency_s}s</td>
                         <td>{t.confidence}%</td>
                         <td>
@@ -946,12 +1110,12 @@ export default function App() {
               </div>
               <div className="metric-card">
                 <span className="metric-label">Token F1 Score</span>
-                <span className="metric-val">87.4%</span>
+                <span className="metric-val" style={{ color: 'var(--accent-green)' }}>87.4%</span>
                 <span style={{ fontSize: '0.72rem', color: 'var(--accent-green)' }}>Held-Out Test Benchmark</span>
               </div>
               <div className="metric-card">
                 <span className="metric-label">Avg Inference Latency</span>
-                <span className="metric-val">0.142s</span>
+                <span className="metric-val" style={{ color: 'var(--accent-purple)' }}>0.142s</span>
                 <span style={{ fontSize: '0.72rem', color: 'var(--accent-purple)' }}>FP16 Native Tensor Compute</span>
               </div>
             </div>
@@ -1137,7 +1301,7 @@ export default function App() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
               <button
                 className="tab-btn"
-                style={{ border: '1px solid var(--border-color)' }}
+                style={{ border: '1px solid var(--border-color)', borderRadius: '8px' }}
                 onClick={stopCamera}
               >
                 Cancel
@@ -1151,6 +1315,13 @@ export default function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Image Lightbox Modal */}
+      {lightboxSrc && (
+        <div className="lightbox-backdrop" onClick={() => setLightboxSrc(null)}>
+          <img src={lightboxSrc} alt="Enlarged view" className="lightbox-img" />
         </div>
       )}
     </div>
