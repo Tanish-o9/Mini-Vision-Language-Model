@@ -270,6 +270,7 @@ export default function App() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [promptCategory, setPromptCategory] = useState('general');
   const [selectedArchNode, setSelectedArchNode] = useState(null);
+  const [activePreset, setActivePreset] = useState(null);
 
   // Audio / Voice state
   const [isRecording, setIsRecording] = useState(false);
@@ -487,7 +488,8 @@ export default function App() {
   };
 
   // Load Real Photo Preset
-  const loadPresetPhoto = async (url) => {
+  const loadPresetPhoto = async (url, id, title) => {
+    setActivePreset(id);
     try {
       const res = await fetch(url);
       const blob = await res.blob();
@@ -496,6 +498,13 @@ export default function App() {
         setImagePreview(reader.result);
         setSelectedImage(reader.result);
         setLatestVisualCues('');
+        setChatHistory([
+          {
+            role: 'bot',
+            content: `Switched visual source to **${title}**. Ask me any question!`,
+            time: 'Ready'
+          }
+        ]);
       };
       reader.readAsDataURL(blob);
     } catch (err) {
@@ -529,18 +538,25 @@ export default function App() {
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      setActivePreset(null);
+      const applyImage = (result) => {
+        setImagePreview(result);
+        setSelectedImage(result);
+        setLatestVisualCues('');
+        setChatHistory([
+          {
+            role: 'bot',
+            content: 'New image uploaded successfully. What would you like to know about it?',
+            time: 'Ready'
+          }
+        ]);
+      };
       try {
         const optimized = await compressImageFile(file);
-        setImagePreview(optimized);
-        setSelectedImage(optimized);
-        setLatestVisualCues('');
+        applyImage(optimized);
       } catch {
         const reader = new FileReader();
-        reader.onloadend = () => {
-          setImagePreview(reader.result);
-          setSelectedImage(reader.result);
-          setLatestVisualCues('');
-        };
+        reader.onloadend = () => applyImage(reader.result);
         reader.readAsDataURL(file);
       }
     }
@@ -590,7 +606,7 @@ export default function App() {
         signal: controller.signal,
         body: JSON.stringify({
           image_base64: selectedImage,
-          secondary_image_base64: isCompareMode ? secondaryImage : null,
+          secondary_image_base64: (isCompareMode && secondaryImage) ? secondaryImage : null,
           question: q,
           history: apiHistory,
           max_new_tokens: maxTokens,
@@ -912,8 +928,8 @@ export default function App() {
                   {PRESET_SAMPLES.map((p) => (
                     <button
                       key={p.id}
-                      className="preset-thumb-btn"
-                      onClick={() => loadPresetPhoto(p.url)}
+                      className={`preset-thumb-btn ${activePreset === p.id ? 'active-preset' : ''}`}
+                      onClick={() => loadPresetPhoto(p.url, p.id, p.title)}
                       title={`Load ${p.title}`}
                     >
                       <img src={p.url} alt={p.title} className="preset-thumb-img" />

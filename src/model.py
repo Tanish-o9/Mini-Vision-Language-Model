@@ -220,14 +220,17 @@ class MiniVLM(nn.Module):
     def format_prompt(self, text, history=None, is_caption=False, visual_context=""):
         raw_text = "Describe this image in one clear sentence." if is_caption else str(text)
         instruction = self._normalize_query(raw_text)
-        user_content = f"[Image Content: {visual_context}]\nQuestion: {instruction}" if visual_context else instruction
+        if visual_context:
+            user_content = f"Image observation: {visual_context}. Question: {instruction}"
+        else:
+            user_content = instruction
 
         messages = [
             {
                 "role": "system",
                 "content": (
-                    "You are Mini-VLM, an expert multimodal vision assistant. "
-                    "Identify the visual content and answer the user question directly, accurately, and concisely."
+                    "You are Mini-VLM, a helpful and precise vision-language assistant. "
+                    "Follow the image observation strictly and answer the question accurately in a single, direct sentence."
                 ),
             }
         ]
