@@ -105,20 +105,41 @@ class MiniVLM(nn.Module):
         return out
 
     def _init_visual_vocab(self):
-        """Precompute text embeddings for key visual concepts for instant zero-shot visual grounding."""
+        """Precompute text embeddings for balanced visual concepts with calibrated CLIP temperature."""
         self.vocab_concepts = [
-            "computer desktop screen", "software application window", "software splash screen",
-            "computer icons and taskbar", "programming code editor", "illustration artwork",
-            "bird perched in nature", "animal wildlife", "dog pet", "cat pet",
-            "blue t-shirt", "t-shirt apparel", "shirt clothing", "jacket coat",
-            "shoes sneakers", "human person", "outdoor landscape scenery", "trees and foliage",
-            "indoor room interior", "mobile smartphone", "laptop computer", "book document",
-            "vehicle car", "food dish meal", "coffee mug cup", "table desk surface"
+            "a t-shirt or casual shirt",
+            "a jacket, coat, or hoodie",
+            "pants, jeans, or trousers",
+            "shoes, sneakers, or footwear",
+            "a dress or gown",
+            "a dog or puppy",
+            "a cat or kitten",
+            "a bird perched or flying",
+            "wild animals in nature",
+            "a person, human face, or portrait",
+            "a car, automobile, or road vehicle",
+            "a bicycle or motorcycle",
+            "a smartphone or mobile device",
+            "a laptop or personal computer",
+            "food, a meal, or snack",
+            "a cup, mug, or beverage bottle",
+            "a book, notebook, or paper document",
+            "trees, plants, or outdoor nature landscape",
+            "an indoor room, living space, or furniture",
+            "a computer desktop screen or software application window"
+        ]
+        self.vocab_labels = [
+            "t-shirt", "jacket/coat", "pants/jeans", "shoes/sneakers", "dress",
+            "dog", "cat", "bird", "wild animal", "person/portrait",
+            "car/vehicle", "bicycle/motorcycle", "smartphone", "laptop",
+            "food/meal", "cup/bottle", "book/document", "trees/nature landscape",
+            "indoor room/furniture", "software application/computer screen"
         ]
         self.vocab_colors = [
-            "blue", "navy blue", "cyan light blue", "orange", "brown", "green", "red",
+            "blue", "navy blue", "cyan or light blue", "orange", "brown", "green", "red",
             "yellow", "black", "white", "gray", "purple"
         ]
+        self.color_prompts = [f"a photo with {c} as the primary color" for c in self.vocab_colors]
         try:
             with torch.no_grad():
                 c_tokens = self.processor(text=self.vocab_concepts, padding=True, return_tensors="pt").to(self.device_name)
@@ -126,7 +147,7 @@ class MiniVLM(nn.Module):
                 feat_c = self._extract_tensor(raw_c)
                 self.text_feat_concepts = (feat_c / feat_c.norm(dim=-1, keepdim=True)).to(self.dtype)
 
-                col_tokens = self.processor(text=self.vocab_colors, padding=True, return_tensors="pt").to(self.device_name)
+                col_tokens = self.processor(text=self.color_prompts, padding=True, return_tensors="pt").to(self.device_name)
                 raw_col = self.clip.get_text_features(**col_tokens)
                 feat_col = self._extract_tensor(raw_col)
                 self.text_feat_colors = (feat_col / feat_col.norm(dim=-1, keepdim=True)).to(self.dtype)
@@ -136,7 +157,7 @@ class MiniVLM(nn.Module):
             self.text_feat_colors = None
 
     def extract_visual_semantics(self, image):
-        """Extract high-confidence zero-shot visual concept tags via CLIP in ~1ms."""
+        """Extract high-confidence zero-shot visual concepts using calibrated CLIP logit scaling."""
         if getattr(self, "text_feat_concepts", None) is None:
             return ""
         try:
@@ -146,30 +167,46 @@ class MiniVLM(nn.Module):
                 img_feat = self._extract_tensor(raw_img)
                 img_feat = img_feat / img_feat.norm(dim=-1, keepdim=True)
 
+                scale = getattr(self.clip, "logit_scale", torch.tensor(4.6)).exp().to(self.dtype)
+
+                # Calibrated concept probability distribution
                 sim_c = (img_feat @ self.text_feat_concepts.to(dtype=self.dtype).T)[0]
-                top_c_idx = torch.topk(sim_c, k=2).indices.tolist()
-                c_labels = [self.vocab_concepts[i] for i in top_c_idx]
+                probs_c = (sim_c * scale).softmax(dim=-1)
+                top_indices = torch.topk(probs_c, k=2).indices.tolist()
 
+                # Filter strictly by confidence threshold (prob >= 0.18) to avoid false positives
+                matched_concepts = [
+                    self.vocab_labels[i] for i in top_indices if probs_c[i].item() >= 0.18
+                ]
+
+                # Calibrated color probability distribution
                 sim_col = (img_feat @ self.text_feat_colors.to(dtype=self.dtype).T)[0]
-                top_col_idx = torch.topk(sim_col, k=2).indices.tolist()
-                col_labels = [self.vocab_colors[i] for i in top_col_idx]
+                probs_col = (sim_col * scale).softmax(dim=-1)
+                top_col_idx = torch.argmax(probs_col).item()
+                top_col = self.vocab_colors[top_col_idx] if probs_col[top_col_idx].item() >= 0.15 else None
 
-                return f"Observed objects: {', '.join(c_labels)}. Colors: {', '.join(col_labels)}."
+                parts = []
+                if matched_concepts:
+                    parts.append(f"Subject: {', '.join(matched_concepts)}")
+                if top_col:
+                    parts.append(f"Color: {top_col}")
+
+                return ". ".join(parts)
         except Exception:
             return ""
 
     def format_prompt(self, text, history=None, is_caption=False, visual_context=""):
         instruction = "Describe this image in one clear sentence." if is_caption else str(text)
         if visual_context:
-            instruction = f"[Visual Observation: {visual_context}]\nQuestion: {instruction}"
+            instruction = f"[Visual cues: {visual_context}]\nQuestion: {instruction}"
 
         messages = [
             {
                 "role": "system",
                 "content": (
                     "You are Mini-VLM, an expert multimodal vision-language assistant. "
-                    "Analyze the visual observation and answer the user question directly in 1-2 clear, helpful sentences. "
-                    "Never hallucinate random numbers, articles, or claim inability to see."
+                    "Based on the visual cues and image provided, answer the user's question directly, "
+                    "naturally, and accurately in 1 or 2 concise sentences."
                 ),
             }
         ]
