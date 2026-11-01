@@ -71,16 +71,14 @@ def get_model(checkpoint: str = "checkpoints/stage2", stage: str = "stage2"):
     )
 
     ckpt_path = Path(checkpoint)
-    if stage == "stage1":
-        if ckpt_path.exists():
-            model.load_projector(ckpt_path)
-    else:
-        proj = ckpt_path / "projector.pt"
-        lora = ckpt_path / "lora"
-        if proj.exists():
-            model.load_projector(proj)
-        if lora.exists():
-            model.load_lora(lora)
+    proj_file = ckpt_path / "projector.pt" if ckpt_path.is_dir() else ckpt_path
+    if proj_file.exists():
+        model.load_projector(proj_file)
+
+    if stage != "stage1":
+        lora_dir = ckpt_path / "lora" if ckpt_path.is_dir() else None
+        if lora_dir and lora_dir.exists() and (lora_dir / "trained.lock").exists():
+            model.load_lora(lora_dir)
 
     model.eval()
     MODEL_CACHE["model"] = model

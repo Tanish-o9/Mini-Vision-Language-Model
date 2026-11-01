@@ -107,16 +107,17 @@ class MiniVLM(nn.Module):
     def _init_visual_vocab(self):
         """Precompute text embeddings for key visual concepts for instant zero-shot visual grounding."""
         self.vocab_concepts = [
-            "blue t-shirt", "t-shirt", "shirt", "clothing apparel", "jacket coat",
-            "pants trousers", "shoes sneakers", "dress", "hat cap",
-            "cat pet", "dog pet", "bird", "horse", "car vehicle", "bicycle",
-            "motorcycle", "laptop computer", "cell phone mobile", "table desk", "chair",
-            "cup mug", "bottle container", "book", "food meal", "indoor room",
-            "outdoor scenery nature", "floor surface"
+            "computer desktop screen", "software application window", "software splash screen",
+            "computer icons and taskbar", "programming code editor", "illustration artwork",
+            "bird perched in nature", "animal wildlife", "dog pet", "cat pet",
+            "blue t-shirt", "t-shirt apparel", "shirt clothing", "jacket coat",
+            "shoes sneakers", "human person", "outdoor landscape scenery", "trees and foliage",
+            "indoor room interior", "mobile smartphone", "laptop computer", "book document",
+            "vehicle car", "food dish meal", "coffee mug cup", "table desk surface"
         ]
         self.vocab_colors = [
-            "blue", "navy blue", "red", "green", "black", "white", "gray", "yellow",
-            "orange", "brown", "purple", "pink"
+            "blue", "navy blue", "cyan light blue", "orange", "brown", "green", "red",
+            "yellow", "black", "white", "gray", "purple"
         ]
         try:
             with torch.no_grad():
@@ -160,16 +161,15 @@ class MiniVLM(nn.Module):
     def format_prompt(self, text, history=None, is_caption=False, visual_context=""):
         instruction = "Describe this image in one clear sentence." if is_caption else str(text)
         if visual_context:
-            instruction = f"[Visual Context: {visual_context}]\n{instruction}"
+            instruction = f"[Visual Observation: {visual_context}]\nQuestion: {instruction}"
 
         messages = [
             {
                 "role": "system",
                 "content": (
                     "You are Mini-VLM, an expert multimodal vision-language assistant. "
-                    "You directly inspect the visual tokens and visual context of user-provided images. "
-                    "Answer questions directly, accurately, and naturally describing the visual elements. "
-                    "Never refuse or claim inability to see the image."
+                    "Analyze the visual observation and answer the user question directly in 1-2 clear, helpful sentences. "
+                    "Never hallucinate random numbers, articles, or claim inability to see."
                 ),
             }
         ]
@@ -309,7 +309,16 @@ class MiniVLM(nn.Module):
         prompt = self.format_prompt(formatted_q, history=history, is_caption=False, visual_context=visual_context)
         prompt_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.device_name)
         prompt_embeds = self.qwen.get_input_embeddings()(prompt_ids)
-        inputs_embeds = torch.cat([visual_tokens, prompt_embeds], dim=1)
+
+        # Scale visual tokens safely to match embedding norm and prevent attention head saturation
+        embed_norm = prompt_embeds.norm(dim=-1).mean().item()
+        vt_norm = visual_tokens.norm(dim=-1).mean().item()
+        if vt_norm > 0:
+            scaled_visual_tokens = visual_tokens * (embed_norm / vt_norm)
+        else:
+            scaled_visual_tokens = visual_tokens
+
+        inputs_embeds = torch.cat([scaled_visual_tokens, prompt_embeds], dim=1)
         attention_mask = torch.ones(
             inputs_embeds.shape[:2], dtype=torch.long, device=self.device_name
         )
@@ -318,10 +327,14 @@ class MiniVLM(nn.Module):
             attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
             do_sample=False,
-            repetition_penalty=1.1,
+            repetition_penalty=1.15,
             pad_token_id=self.tokenizer.eos_token_id,
         )
-        return self.tokenizer.decode(generated[0], skip_special_tokens=True).strip()
+        ans = self.tokenizer.decode(generated[0], skip_special_tokens=True).strip()
+        # Clean any accidental assistant prompt label bleed
+        if "assistant\n" in ans:
+            ans = ans.split("assistant\n")[-1].strip()
+        return ans
 
     def save_projector(self, path):
         path = Path(path)
