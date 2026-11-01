@@ -190,5 +190,9 @@ if dist_dir.exists():
     app.mount("/", StaticFiles(directory=str(dist_dir), html=True), name="static")
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)
+    print("=" * 60)
+    print("Starting Mini-VLM Studio Server at http://localhost:8000")
+    print("React AI Studio Dashboard: http://localhost:8000")
+    print("=" * 60)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 

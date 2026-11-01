@@ -13,3 +13,4 @@ services:
       - ./outputs:/app/outputs
       - ./data:/app/data
     restart: unless-stopped
+

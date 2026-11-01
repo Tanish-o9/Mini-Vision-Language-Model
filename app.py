@@ -22,10 +22,15 @@ def build_app(checkpoint, stage, load_in_4bit=False):
         load_in_4bit=load_in_4bit,
     )
     if stage == "stage1":
-        model.load_projector(checkpoint)
+        if Path(checkpoint).exists():
+            model.load_projector(checkpoint)
     else:
-        model.load_projector(Path(checkpoint) / "projector.pt")
-        model.load_lora(Path(checkpoint) / "lora")
+        proj = Path(checkpoint) / "projector.pt"
+        lora = Path(checkpoint) / "lora"
+        if proj.exists():
+            model.load_projector(proj)
+        if lora.exists():
+            model.load_lora(lora)
     model.eval()
 
     def user_chat(image, user_message, chat_history):
