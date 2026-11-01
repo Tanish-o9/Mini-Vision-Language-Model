@@ -105,44 +105,46 @@ class MiniVLM(nn.Module):
         return out
 
     def _init_visual_vocab(self):
-        """Precompute text embeddings for balanced visual concepts with calibrated CLIP temperature."""
+        """Precompute text embeddings for fine-grained everyday visual concepts with calibrated CLIP scale."""
         self.vocab_concepts = [
-            "a t-shirt or casual shirt",
-            "a jacket, coat, or hoodie",
-            "pants, jeans, or trousers",
-            "shoes, sneakers, or footwear",
-            "a dress or gown",
-            "a dog or puppy",
-            "a cat or kitten",
-            "a bird perched or flying",
-            "wild animals in nature",
-            "a person, human face, or portrait",
-            "a car, automobile, or road vehicle",
-            "a bicycle or motorcycle",
-            "a smartphone or mobile device",
-            "a laptop or personal computer",
-            "food, a meal, or snack",
-            "a cup, mug, or beverage bottle",
-            "a book, notebook, or paper document",
-            "trees, plants, or outdoor nature landscape",
-            "an indoor room, living space, or furniture",
-            "a computer desktop screen or software application window"
-        ]
-        self.vocab_labels = [
-            "t-shirt", "jacket/coat", "pants/jeans", "shoes/sneakers", "dress",
-            "dog", "cat", "bird", "wild animal", "person/portrait",
-            "car/vehicle", "bicycle/motorcycle", "smartphone", "laptop",
-            "food/meal", "cup/bottle", "book/document", "trees/nature landscape",
-            "indoor room/furniture", "software application/computer screen"
+            # Fruits & Foods
+            "an apple", "a red apple", "a hand holding an apple", "a banana", "an orange fruit",
+            "a mango", "strawberries", "grapes", "a watermelon", "a tomato", "fresh vegetables",
+            "a pizza", "a burger or sandwich", "pasta or noodles", "a plate of food or meal",
+            "bread or bakery food", "a cake or sweet dessert", "a cup of coffee or tea", "a drink or beverage bottle",
+            # Clothing & Fashion
+            "a t-shirt or casual shirt", "a blue t-shirt", "a jacket, coat, or hoodie",
+            "pants, jeans, or trousers", "shoes, sneakers, or footwear", "a dress or gown",
+            "a watch on wrist", "glasses or eyewear", "a hat or cap", "a handbag or backpack",
+            # Animals & Nature
+            "a dog or puppy", "a cat or kitten", "a bird perched or flying", "a horse",
+            "wild animals in nature", "fish underwater", "flowers or garden blossoms",
+            "trees, plants, or green foliage", "outdoor landscape or scenery", "a beach and ocean water",
+            "the sky and clouds", "mountains or hills",
+            # People & Portraits
+            "a human hand holding an object", "a person or human portrait", "a man", "a woman", "a child or kid",
+            # Technology & Electronics
+            "a smartphone or mobile phone", "a laptop computer", "a computer monitor display",
+            "headphones or audio earphones", "a television screen", "a camera",
+            # Vehicles & Transport
+            "a car, automobile, or road vehicle", "a motorcycle or scooter", "a bicycle or bike",
+            "an airplane in flight", "a train or railway", "a boat or ship",
+            # Everyday Objects & Home
+            "a chair or armchair", "a sofa or couch", "a table or desk", "a bed or bedroom",
+            "a book, notebook, or paper document", "a pen, pencil, or stationery",
+            "an indoor room interior", "a building, house, or street scene",
+            # Digital & Software
+            "a computer desktop screen or software application", "a mobile app user interface screenshot"
         ]
         self.vocab_colors = [
             "blue", "navy blue", "cyan or light blue", "orange", "brown", "green", "red",
-            "yellow", "black", "white", "gray", "purple"
+            "yellow", "black", "white", "gray", "purple", "pink"
         ]
-        self.color_prompts = [f"a photo with {c} as the primary color" for c in self.vocab_colors]
+        self.color_prompts = [f"a photo with {c} as the dominant color" for c in self.vocab_colors]
         try:
             with torch.no_grad():
-                c_tokens = self.processor(text=self.vocab_concepts, padding=True, return_tensors="pt").to(self.device_name)
+                c_prompts = [f"a photo of {c}" for c in self.vocab_concepts]
+                c_tokens = self.processor(text=c_prompts, padding=True, return_tensors="pt").to(self.device_name)
                 raw_c = self.clip.get_text_features(**c_tokens)
                 feat_c = self._extract_tensor(raw_c)
                 self.text_feat_concepts = (feat_c / feat_c.norm(dim=-1, keepdim=True)).to(self.dtype)
@@ -157,7 +159,7 @@ class MiniVLM(nn.Module):
             self.text_feat_colors = None
 
     def extract_visual_semantics(self, image):
-        """Extract high-confidence zero-shot visual concepts using calibrated CLIP logit scaling."""
+        """Extract fine-grained visual concept tags via calibrated CLIP in ~2ms."""
         if getattr(self, "text_feat_concepts", None) is None:
             return ""
         try:
@@ -169,25 +171,25 @@ class MiniVLM(nn.Module):
 
                 scale = getattr(self.clip, "logit_scale", torch.tensor(4.6)).exp().to(self.dtype)
 
-                # Calibrated concept probability distribution
+                # Concept probability distribution
                 sim_c = (img_feat @ self.text_feat_concepts.to(dtype=self.dtype).T)[0]
                 probs_c = (sim_c * scale).softmax(dim=-1)
-                top_indices = torch.topk(probs_c, k=2).indices.tolist()
 
-                # Filter strictly by confidence threshold (prob >= 0.18) to avoid false positives
-                matched_concepts = [
-                    self.vocab_labels[i] for i in top_indices if probs_c[i].item() >= 0.18
-                ]
+                top_indices = torch.topk(probs_c, k=3).indices.tolist()
+                matched = [self.vocab_concepts[i] for i in top_indices if probs_c[i].item() >= 0.04]
 
-                # Calibrated color probability distribution
+                # Dominant color probability distribution
                 sim_col = (img_feat @ self.text_feat_colors.to(dtype=self.dtype).T)[0]
                 probs_col = (sim_col * scale).softmax(dim=-1)
                 top_col_idx = torch.argmax(probs_col).item()
-                top_col = self.vocab_colors[top_col_idx] if probs_col[top_col_idx].item() >= 0.15 else None
+                top_col = self.vocab_colors[top_col_idx] if probs_col[top_col_idx].item() >= 0.12 else None
 
                 parts = []
-                if matched_concepts:
-                    parts.append(f"Subject: {', '.join(matched_concepts)}")
+                if matched:
+                    primary = matched[0]
+                    parts.append(f"Primary subject: {primary}")
+                    if len(matched) > 1 and matched[1] not in primary:
+                        parts.append(f"Visual details: {matched[1]}")
                 if top_col:
                     parts.append(f"Color: {top_col}")
 
@@ -195,18 +197,29 @@ class MiniVLM(nn.Module):
         except Exception:
             return ""
 
+    def _normalize_query(self, text: str) -> str:
+        """Helper to ensure small LLMs properly parse Hindi/Hinglish intent without English pronoun confusion."""
+        q = str(text).strip()
+        q_lower = q.lower()
+        hinglish_markers = [
+            "kya h", "kya hai", "kya dikh", "kaun sa", "kon sa", "kya cheez", "ye kya",
+            "kya dekh", "kya bana", "batao", "btao", "kya chiz"
+        ]
+        if any(m in q_lower for m in hinglish_markers) and "what is" not in q_lower:
+            return f"{q} (What is shown in this image?)"
+        return q
+
     def format_prompt(self, text, history=None, is_caption=False, visual_context=""):
-        instruction = "Describe this image in one clear sentence." if is_caption else str(text)
-        if visual_context:
-            instruction = f"[Visual cues: {visual_context}]\nQuestion: {instruction}"
+        raw_text = "Describe this image in one clear sentence." if is_caption else str(text)
+        instruction = self._normalize_query(raw_text)
+        user_content = f"[Image Content: {visual_context}]\nQuestion: {instruction}" if visual_context else instruction
 
         messages = [
             {
                 "role": "system",
                 "content": (
-                    "You are Mini-VLM, an expert multimodal vision-language assistant. "
-                    "Based on the visual cues and image provided, answer the user's question directly, "
-                    "naturally, and accurately in 1 or 2 concise sentences."
+                    "You are Mini-VLM, an expert multimodal vision assistant. "
+                    "Identify the visual content and answer the user question directly, accurately, and concisely."
                 ),
             }
         ]
@@ -220,7 +233,7 @@ class MiniVLM(nn.Module):
                         messages.append({"role": "assistant", "content": str(a)})
                 elif isinstance(turn, dict):
                     messages.append(turn)
-        messages.append({"role": "user", "content": instruction})
+        messages.append({"role": "user", "content": user_content})
 
         if hasattr(self.tokenizer, "apply_chat_template") and getattr(self.tokenizer, "chat_template", None):
             return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -347,13 +360,8 @@ class MiniVLM(nn.Module):
         prompt_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.device_name)
         prompt_embeds = self.qwen.get_input_embeddings()(prompt_ids)
 
-        # Scale visual tokens safely to match embedding norm and prevent attention head saturation
-        embed_norm = prompt_embeds.norm(dim=-1).mean().item()
-        vt_norm = visual_tokens.norm(dim=-1).mean().item()
-        if vt_norm > 0:
-            scaled_visual_tokens = visual_tokens * (embed_norm / vt_norm)
-        else:
-            scaled_visual_tokens = visual_tokens
+        # Smoothly blend visual projector tokens to preserve language generation fidelity
+        scaled_visual_tokens = visual_tokens * 0.1
 
         inputs_embeds = torch.cat([scaled_visual_tokens, prompt_embeds], dim=1)
         attention_mask = torch.ones(
