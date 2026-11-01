@@ -97,11 +97,21 @@ class ChatRequest(BaseModel):
     checkpoint: Optional[str] = "checkpoints/stage2"
 
 
+class BoundingBox(BaseModel):
+    label: str
+    ymin: float
+    xmin: float
+    ymax: float
+    xmax: float
+    confidence: float
+
+
 class ChatResponse(BaseModel):
     answer: str
     latency_seconds: float
     device: str
     visual_cues: Optional[str] = None
+    bounding_boxes: Optional[List[BoundingBox]] = None
 
 
 @app.get("/api/status")
@@ -180,7 +190,7 @@ def chat_predict(req: ChatRequest):
     try:
         model = get_model(checkpoint=req.checkpoint or "checkpoints/stage2", stage=req.stage or "stage2")
         start = time.perf_counter()
-        answer, vis_context = model.answer(
+        res = model.answer(
             image=image,
             question=req.question,
             history=req.history,
@@ -188,12 +198,23 @@ def chat_predict(req: ChatRequest):
             secondary_image=secondary_image,
             return_meta=True,
         )
+        if isinstance(res, tuple) and len(res) == 3:
+            answer, vis_context, bounding_boxes = res
+        elif isinstance(res, tuple) and len(res) == 2:
+            answer, vis_context = res
+            bounding_boxes = None
+        else:
+            answer = res
+            vis_context = None
+            bounding_boxes = None
+
         latency = time.perf_counter() - start
         return ChatResponse(
             answer=answer,
             latency_seconds=round(latency, 3),
             device=model.device_name,
             visual_cues=vis_context,
+            bounding_boxes=bounding_boxes,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")

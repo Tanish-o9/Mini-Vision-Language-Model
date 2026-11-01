@@ -1158,6 +1158,60 @@
   color: var(--text-secondary);
 }
 
+/* Bounding Box Grounding Visualizer (Option 3) */
+.bounding-box-overlay {
+  position: absolute;
+  border: 2px solid var(--success);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.4), inset 0 0 16px rgba(16, 185, 129, 0.1);
+  background: rgba(16, 185, 129, 0.08);
+  pointer-events: auto;
+  z-index: 5;
+  border-radius: 4px;
+  animation: boxPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s ease;
+}
+
+@keyframes boxPop {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.bounding-box-overlay:hover {
+  background: rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 24px rgba(16, 185, 129, 0.6);
+}
+
+.bounding-box-tag {
+  position: absolute;
+  top: -24px;
+  left: -2px;
+  background: var(--success);
+  color: #000000;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.bbox-corner {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: #ffffff;
+  border-style: solid;
+}
+
+.bbox-corner.tl { top: -2px; left: -2px; border-width: 2px 0 0 2px; }
+.bbox-corner.tr { top: -2px; right: -2px; border-width: 2px 2px 0 0; }
+.bbox-corner.bl { bottom: -2px; left: -2px; border-width: 0 0 2px 2px; }
+.bbox-corner.br { bottom: -2px; right: -2px; border-width: 0 2px 2px 0; }
+
 /* Responsive */
 @media (max-width: 1024px) {
   .playground-grid {

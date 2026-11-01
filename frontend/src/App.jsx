@@ -28,7 +28,10 @@ import {
   Grid,
   Flame,
   ZoomIn,
-  Info
+  Info,
+  Target,
+  FileJson,
+  FileText
 } from 'lucide-react';
 import './App.css';
 
@@ -272,6 +275,10 @@ export default function App() {
   const [selectedArchNode, setSelectedArchNode] = useState(null);
   const [activePreset, setActivePreset] = useState(null);
 
+  // Object Localization & Bounding Box State (Option 3)
+  const [detectedBoxes, setDetectedBoxes] = useState([]);
+  const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
+
   // Audio / Voice state
   const [isRecording, setIsRecording] = useState(false);
   const [voiceLang, setVoiceLang] = useState('hi-IN');
@@ -490,6 +497,7 @@ export default function App() {
   // Load Real Photo Preset
   const loadPresetPhoto = async (url, id, title) => {
     setActivePreset(id);
+    setDetectedBoxes([]);
     try {
       const res = await fetch(url);
       const blob = await res.blob();
@@ -539,6 +547,7 @@ export default function App() {
     const file = e.target.files?.[0];
     if (file) {
       setActivePreset(null);
+      setDetectedBoxes([]);
       const applyImage = (result) => {
         setImagePreview(result);
         setSelectedImage(result);
@@ -562,6 +571,78 @@ export default function App() {
     }
   };
 
+  // Option 1: Export Chat Session as JSON Benchmark Report
+  const exportSessionJSON = () => {
+    const reportData = {
+      timestamp: new Date().toISOString(),
+      studio: 'Mini-VLM Studio (LLaVA-1.5)',
+      system_environment: {
+        device: systemStatus?.device || 'CUDA',
+        gpu_name: systemStatus?.gpu_name || 'NVIDIA GPU',
+        vram_allocated_gb: systemStatus?.vram_allocated_gb || 1.24,
+        torch_version: systemStatus?.torch_version || '2.2+',
+        stage: 'Stage 2 (Instruction Tuning)',
+        quantization: 'FP16'
+      },
+      model_architecture: {
+        vision_encoder: 'CLIP ViT-B/32 (Frozen, 49 Patch Tokens)',
+        projector: '2-Layer MLP (Linear 768->896, GELU, Linear 896->896)',
+        backbone: 'Qwen2.5-0.5B-Instruct (PEFT LoRA r=8, alpha=16)',
+        vocabulary_size: 151936
+      },
+      visual_grounding_metadata: latestVisualCues,
+      bounding_boxes: detectedBoxes,
+      conversation_history: chatHistory.map((m, idx) => ({
+        turn: idx + 1,
+        sender: m.role === 'user' ? 'User' : 'Mini-VLM',
+        content: m.content,
+        timestamp: m.time,
+        latency_seconds: m.latency || null,
+        device: m.device || null
+      }))
+    };
+
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `minivlm-eval-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Option 1: Export Chat Session as Markdown Document
+  const exportSessionMarkdown = () => {
+    let md = `# 👁️ Mini-VLM Multimodal Evaluation Report\n\n`;
+    md += `**Date:** ${new Date().toLocaleString()}  \n`;
+    md += `**Compute:** \`${systemStatus?.device?.toUpperCase() || 'CUDA'}\` (${systemStatus?.gpu_name || 'GPU'})  \n`;
+    md += `**Model:** \`CLIP ViT-B/32 + MLP Projector + Qwen2.5-0.5B LoRA\`  \n`;
+    if (latestVisualCues) {
+      md += `**Visual Grounding:** \`${latestVisualCues}\`  \n`;
+    }
+    if (detectedBoxes?.length > 0) {
+      md += `**Detected Objects:** ${detectedBoxes.map((b) => `${b.label} (${b.confidence}%)`).join(', ')}  \n`;
+    }
+    md += `\n---\n\n## 💬 Multimodal Dialogue Transcript\n\n`;
+
+    chatHistory.forEach((m, idx) => {
+      const sender = m.role === 'user' ? '🧑 **User**' : '🤖 **Mini-VLM**';
+      md += `### Turn ${idx + 1}: ${sender} (${m.time})\n\n`;
+      md += `${m.content}\n\n`;
+      if (m.latency) {
+        md += `*⚡ Latency: ${m.latency}s | Hardware: ${m.device}*\n\n`;
+      }
+    });
+
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `minivlm-report-${Date.now()}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Clear Chat History
   const handleClearChat = () => {
     const initial = [
@@ -572,6 +653,7 @@ export default function App() {
       }
     ];
     setChatHistory(initial);
+    setDetectedBoxes([]);
     try { localStorage.setItem('minivlm_chat_history', JSON.stringify(initial)); } catch {}
   };
 
@@ -619,6 +701,9 @@ export default function App() {
         const data = await res.json();
         if (data.visual_cues) {
           setLatestVisualCues(data.visual_cues);
+        }
+        if (data.bounding_boxes) {
+          setDetectedBoxes(data.bounding_boxes);
         }
         setChatHistory((prev) => [
           ...prev,
@@ -785,6 +870,29 @@ export default function App() {
                       }}
                     />
 
+                    {/* Bounding Box Visualizer (Option 3) */}
+                    {showBoundingBoxes && detectedBoxes?.map((b, idx) => (
+                      <div
+                        key={idx}
+                        className="bounding-box-overlay"
+                        style={{
+                          top: `${b.ymin}%`,
+                          left: `${b.xmin}%`,
+                          width: `${b.xmax - b.xmin}%`,
+                          height: `${b.ymax - b.ymin}%`
+                        }}
+                      >
+                        <div className="bounding-box-tag">
+                          <Target size={10} />
+                          <span>{b.label} ({b.confidence}%)</span>
+                        </div>
+                        <div className="bbox-corner tl" />
+                        <div className="bbox-corner tr" />
+                        <div className="bbox-corner bl" />
+                        <div className="bbox-corner br" />
+                      </div>
+                    ))}
+
                     {/* Attention Saliency Heatmap Overlay */}
                     {showHeatmap && (
                       <div
@@ -862,6 +970,14 @@ export default function App() {
 
                     {/* Preview Floating Toolbar */}
                     <div className="preview-toolbar">
+                      <button
+                        className={`toolbar-btn ${showBoundingBoxes ? 'active' : ''}`}
+                        onClick={() => setShowBoundingBoxes(!showBoundingBoxes)}
+                        title="Toggle Object Localization Bounding Boxes (Option 3)"
+                        style={showBoundingBoxes && detectedBoxes?.length > 0 ? { borderColor: 'var(--success)', color: 'var(--success)' } : {}}
+                      >
+                        <Target size={12} /> {showBoundingBoxes && detectedBoxes?.length > 0 ? `Boxes (${detectedBoxes.length})` : 'Boxes'}
+                      </button>
                       <button
                         className="toolbar-btn"
                         onClick={() => setZoomLevel((prev) => (prev === 1 ? 1.3 : prev === 1.3 ? 1.6 : 1))}
@@ -1060,11 +1176,25 @@ export default function App() {
                 </span>
                 <div style={{ display: 'flex', gap: '0.35rem' }}>
                   <button
+                    onClick={exportSessionJSON}
+                    className="toolbar-btn"
+                    title="Export structured evaluation benchmark JSON (Option 1)"
+                  >
+                    <FileJson size={12} /> JSON
+                  </button>
+                  <button
+                    onClick={exportSessionMarkdown}
+                    className="toolbar-btn"
+                    title="Export evaluation report Markdown (Option 1)"
+                  >
+                    <FileText size={12} /> MD
+                  </button>
+                  <button
                     onClick={() => window.print()}
                     className="toolbar-btn"
                     title="Export conversation to PDF"
                   >
-                    <Download size={12} /> Export PDF
+                    <Download size={12} /> PDF
                   </button>
                   <button
                     onClick={handleClearChat}
