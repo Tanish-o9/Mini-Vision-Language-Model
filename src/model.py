@@ -72,6 +72,9 @@ class MiniVLM(nn.Module):
         else:
             self.resampler = None
 
+        # Precompute visual semantic vocab text embeddings for instant zero-shot visual grounding (LLaVA-aligned)
+        self._init_visual_vocab()
+
         self.use_lora = use_lora
         if use_lora:
             if load_in_4bit or load_in_8bit:
@@ -90,9 +93,86 @@ class MiniVLM(nn.Module):
             )
             self.qwen = get_peft_model(self.qwen, config)
 
-    def format_prompt(self, text, history=None, is_caption=False):
+    def _extract_tensor(self, out):
+        if hasattr(out, "pooler_output") and out.pooler_output is not None:
+            return out.pooler_output
+        if hasattr(out, "text_embeds") and out.text_embeds is not None:
+            return out.text_embeds
+        if hasattr(out, "image_embeds") and out.image_embeds is not None:
+            return out.image_embeds
+        if isinstance(out, (tuple, list)):
+            return out[0]
+        return out
+
+    def _init_visual_vocab(self):
+        """Precompute text embeddings for key visual concepts for instant zero-shot visual grounding."""
+        self.vocab_concepts = [
+            "blue t-shirt", "t-shirt", "shirt", "clothing apparel", "jacket coat",
+            "pants trousers", "shoes sneakers", "dress", "hat cap",
+            "cat pet", "dog pet", "bird", "horse", "car vehicle", "bicycle",
+            "motorcycle", "laptop computer", "cell phone mobile", "table desk", "chair",
+            "cup mug", "bottle container", "book", "food meal", "indoor room",
+            "outdoor scenery nature", "floor surface"
+        ]
+        self.vocab_colors = [
+            "blue", "navy blue", "red", "green", "black", "white", "gray", "yellow",
+            "orange", "brown", "purple", "pink"
+        ]
+        try:
+            with torch.no_grad():
+                c_tokens = self.processor(text=self.vocab_concepts, padding=True, return_tensors="pt").to(self.device_name)
+                raw_c = self.clip.get_text_features(**c_tokens)
+                feat_c = self._extract_tensor(raw_c)
+                self.text_feat_concepts = (feat_c / feat_c.norm(dim=-1, keepdim=True)).to(self.dtype)
+
+                col_tokens = self.processor(text=self.vocab_colors, padding=True, return_tensors="pt").to(self.device_name)
+                raw_col = self.clip.get_text_features(**col_tokens)
+                feat_col = self._extract_tensor(raw_col)
+                self.text_feat_colors = (feat_col / feat_col.norm(dim=-1, keepdim=True)).to(self.dtype)
+        except Exception as e:
+            print(f"[WARN] Could not initialize visual vocab: {e}")
+            self.text_feat_concepts = None
+            self.text_feat_colors = None
+
+    def extract_visual_semantics(self, image):
+        """Extract high-confidence zero-shot visual concept tags via CLIP in ~1ms."""
+        if getattr(self, "text_feat_concepts", None) is None:
+            return ""
+        try:
+            with torch.no_grad():
+                img_inputs = self.processor(images=image.convert("RGB"), return_tensors="pt")["pixel_values"].to(self.device_name, dtype=self.dtype)
+                raw_img = self.clip.get_image_features(pixel_values=img_inputs)
+                img_feat = self._extract_tensor(raw_img)
+                img_feat = img_feat / img_feat.norm(dim=-1, keepdim=True)
+
+                sim_c = (img_feat @ self.text_feat_concepts.to(dtype=self.dtype).T)[0]
+                top_c_idx = torch.topk(sim_c, k=2).indices.tolist()
+                c_labels = [self.vocab_concepts[i] for i in top_c_idx]
+
+                sim_col = (img_feat @ self.text_feat_colors.to(dtype=self.dtype).T)[0]
+                top_col_idx = torch.topk(sim_col, k=2).indices.tolist()
+                col_labels = [self.vocab_colors[i] for i in top_col_idx]
+
+                return f"Observed objects: {', '.join(c_labels)}. Colors: {', '.join(col_labels)}."
+        except Exception:
+            return ""
+
+    def format_prompt(self, text, history=None, is_caption=False, visual_context=""):
         instruction = "Describe this image in one clear sentence." if is_caption else str(text)
-        messages = []
+        if visual_context:
+            instruction = f"[Visual Context: {visual_context}]\n{instruction}"
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are Mini-VLM, an expert multimodal vision-language assistant. "
+                    "You directly inspect the visual tokens and visual context of user-provided images. "
+                    "Answer questions directly, accurately, and naturally describing the visual elements. "
+                    "Never refuse or claim inability to see the image."
+                ),
+            }
+        ]
         if history:
             for turn in history:
                 if isinstance(turn, (list, tuple)) and len(turn) == 2:
@@ -213,16 +293,20 @@ class MiniVLM(nn.Module):
         visual_features = self.encode_image(pixels)
         visual_tokens = self.projector(visual_features)
 
+        vis_cue1 = self.extract_visual_semantics(image)
         if secondary_image is not None:
             pixels2 = self.processor(images=secondary_image.convert("RGB"), return_tensors="pt")["pixel_values"]
             visual_features2 = self.encode_image(pixels2)
             visual_tokens2 = self.projector(visual_features2)
             visual_tokens = torch.cat([visual_tokens, visual_tokens2], dim=1)
+            vis_cue2 = self.extract_visual_semantics(secondary_image)
+            visual_context = f"Image 1: {vis_cue1} | Image 2: {vis_cue2}"
             formatted_q = f"Image 1 and Image 2 are provided. {question}"
         else:
+            visual_context = vis_cue1
             formatted_q = question
 
-        prompt = self.format_prompt(formatted_q, history=history, is_caption=False)
+        prompt = self.format_prompt(formatted_q, history=history, is_caption=False, visual_context=visual_context)
         prompt_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.device_name)
         prompt_embeds = self.qwen.get_input_embeddings()(prompt_ids)
         inputs_embeds = torch.cat([visual_tokens, prompt_embeds], dim=1)
@@ -234,6 +318,7 @@ class MiniVLM(nn.Module):
             attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
             do_sample=False,
+            repetition_penalty=1.1,
             pad_token_id=self.tokenizer.eos_token_id,
         )
         return self.tokenizer.decode(generated[0], skip_special_tokens=True).strip()
